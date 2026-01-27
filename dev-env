@@ -127,8 +127,8 @@ elif [ "$is_mac" = true ]; then
     copy $DEV_ENV/env/.zshrc.local.mac $HOME/.zshrc.local
 elif [ "$is_server" = true ]; then
     echo "Copying server-specific config..."
-    copy $DEV_ENV/env/.gitconfig.local.linux $HOME/.gitconfig.local
-    copy $DEV_ENV/env/.zshrc.local.linux $HOME/.zshrc.local
+    copy $DEV_ENV/env/.gitconfig.local.server $HOME/.gitconfig.local
+    copy $DEV_ENV/env/.zshrc.local.server $HOME/.zshrc.local
 elif [ "$is_q" = true ]; then
     echo "Copying q-specific config..."
     copy $DEV_ENV/workdev/env/.gitconfig.local $HOME/.gitconfig.local

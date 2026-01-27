@@ -102,10 +102,10 @@ install_rg() {
 
 # Neovim (nvim)
 install_nvim() {
-    if has_command nvim; then
-        echo "✔ nvim is already installed"
-        return
-    fi
+    #if has_command nvim; then
+    #    echo "✔ nvim is already installed"
+    #    return
+    #fi
 
     echo "Installing nvim..."
 
@@ -257,17 +257,18 @@ install_zoxide() {
     echo "Installing zoxide..."
     cd "$TMP_DIR"
     LATEST=$(curl -s https://api.github.com/repos/ajeetdsouza/zoxide/releases/latest | grep tag_name | cut -d '"' -f 4)
+    LATEST_NO_V=$(curl -s https://api.github.com/repos/ajeetdsouza/zoxide/releases/latest | grep tag_name | cut -d '"' -f 4 | sed 's/^v//')
     ARCH=$(uname -m)
     case "$ARCH" in
-    x86_64) ARCH_TYPE="x86_64-unknown-linux-gnu" ;;
-    aarch64 | arm64) ARCH_TYPE="aarch64-unknown-linux-gnu" ;;
+    x86_64) ARCH_TYPE="x86_64-unknown-linux-musl" ;;
+    aarch64 | arm64) ARCH_TYPE="aarch64-unknown-linux-musl" ;;
     *) echo "Unsupported arch: $ARCH" && return 1 ;;
     esac
 
-    URL="https://github.com/ajeetdsouza/zoxide/releases/download/${LATEST}/zoxide-${LATEST}-${ARCH_TYPE}.zip"
-    curl -LO "$URL"
-    unzip -q zoxide-${LATEST}-${ARCH_TYPE}.zip
-    cp "zoxide-${LATEST}-${ARCH_TYPE}/zoxide" "$LOCAL_BIN"
+    URL="https://github.com/ajeetdsouza/zoxide/releases/download/${LATEST}/zoxide-${LATEST_NO_V}-${ARCH_TYPE}.tar.gz"
+    wget "$URL"
+    tar -xf zoxide-${LATEST_NO_V}-${ARCH_TYPE}.tar.gz
+    cp "zoxide" "$LOCAL_BIN"
     chmod +x "$LOCAL_BIN/zoxide"
     echo "✔ zoxide installed to $LOCAL_BIN"
 }
@@ -281,6 +282,7 @@ install_lazygit() {
     echo "Installing lazygit..."
     cd "$TMP_DIR"
     LATEST=$(curl -s https://api.github.com/repos/jesseduffield/lazygit/releases/latest | grep tag_name | cut -d '"' -f 4)
+    LATEST_NO_V=$(curl -s https://api.github.com/repos/jesseduffield/lazygit/releases/latest | grep tag_name | cut -d '"' -f 4 | sed 's/^v//')
     ARCH=$(uname -m)
     case "$ARCH" in
     x86_64) ARCH_TYPE="Linux_x86_64" ;;
@@ -288,9 +290,9 @@ install_lazygit() {
     *) echo "Unsupported arch: $ARCH" && return 1 ;;
     esac
 
-    URL="https://github.com/jesseduffield/lazygit/releases/download/${LATEST}/lazygit_${LATEST}_${ARCH_TYPE}.tar.gz"
+    URL="https://github.com/jesseduffield/lazygit/releases/download/${LATEST}/lazygit_${LATEST_NO_V}_${ARCH_TYPE}.tar.gz"
     curl -LO "$URL"
-    tar xf lazygit_${LATEST}_${ARCH_TYPE}.tar.gz
+    tar xf lazygit_${LATEST_NO_V}_${ARCH_TYPE}.tar.gz
     cp lazygit "$LOCAL_BIN"
     chmod +x "$LOCAL_BIN/lazygit"
     echo "✔ lazygit installed to $LOCAL_BIN"
@@ -310,6 +312,8 @@ install_eza
 install_yazi
 install_delta
 install_nvim
+install_zoxide
+install_lazygit
 
 echo ""
 echo "✅ All tools installed."
