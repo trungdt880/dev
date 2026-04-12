@@ -18,6 +18,7 @@ window-padding-y = 10,10
 window-decoration = true
 macos-window-shadow = false
 macos-titlebar-style = hidden
+confirm-close-surface = true
 
 theme = kanagawabones
 
