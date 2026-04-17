@@ -1,0 +1,29 @@
+export WS=waiv
+export MYHOME=/nobackup2/trungdt
+export CARGO_HOME=$MYHOME/.cargo
+export RUSTUP_HOME=$MYHOME/.cargo
+export PATH=$MYHOME/.cargo/bin:$MYHOME/bin:$PATH
+export UV_CACHE_DIR=$MYHOME/.uv-cache
+export TMPDIR=$MYHOME/.tmp
+export PIP_CACHE_DIR=$MYHOME/.cache/pip
+# python bytecode/cache
+export PYTHONPYCACHEPREFIX=$MYHOME/.pycache
+# huggingface / transformers / datasets
+export HF_HOME=$MYHOME/.cache/huggingface
+export TRANSFORMERS_CACHE=$MYHOME/.cache/huggingface/transformers
+export HF_DATASETS_CACHE=$MYHOME/.cache/huggingface/datasets
+# torch cache/hub
+export TORCH_HOME=$MYHOME/.cache/torch
+# conda/mamba (if you use them)
+export CONDA_PKGS_DIRS=$MYHOME/.conda/pkgs
+
+
+pcat() {
+    if [[ -f "$1" ]]; then
+        (cat "$1") | xclip -selection clipboard
+        echo "Content of '$1' copied to clipboard with newline."
+    else
+        echo "File '$1' not found."
+    fi
+
+}

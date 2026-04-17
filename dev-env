@@ -23,6 +23,8 @@ fi
 is_mac=false
 is_linux=false
 is_server=false
+is_waiv=false
+is_etri=false
 
 # Logic based on WS value
 case "$WS" in
@@ -37,6 +39,14 @@ linux)
 server)
     echo "Detected server environment via WS=$WS"
     is_server=true
+    ;;
+waiv)
+    echo "Detected server environment via WS=$WS"
+    is_waiv=true
+    ;;
+etri)
+    echo "Detected server environment via WS=$WS"
+    is_etri=true
     ;;
 q)
     echo "Detected Q environment via WS=$WS"
@@ -129,6 +139,10 @@ elif [ "$is_server" = true ]; then
     echo "Copying server-specific config..."
     copy $DEV_ENV/env/.gitconfig.local.server $HOME/.gitconfig.local
     copy $DEV_ENV/env/.zshrc.local.server $HOME/.zshrc.local
+elif [ "$is_waiv" = true ]; then
+    echo "Copying server-specific config..."
+    copy $DEV_ENV/env/.gitconfig.local.server $HOME/.gitconfig.local
+    copy $DEV_ENV/env/.zshrc.local.waiv $HOME/.zshrc.local
 elif [ "$is_q" = true ]; then
     echo "Copying q-specific config..."
     copy $DEV_ENV/workdev/env/.gitconfig.local $HOME/.gitconfig.local
