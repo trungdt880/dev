@@ -52,9 +52,12 @@ etri)
     is_etri=true
     ;;
 q)
+    # Q environment uses a separate private-creds repo cloned at $DEV_ENV/workdev.
+    # That repo carries workdev/env/.gitconfig.local, .zshrc.local, and helper
+    # scripts under .local/scripts/ — applied later in this script.
     echo "Detected Q environment via WS=$WS"
-    if [ ! -d "workdev" ]; then
-        echo "Error: workdev folder does not exist. Please clone it first."
+    if [ ! -d "$DEV_ENV/workdev" ]; then
+        echo "Error: \$DEV_ENV/workdev does not exist. Clone the private repo there first." >&2
         exit 1
     fi
     is_q=true
@@ -159,6 +162,7 @@ elif [ "$is_q" = true ]; then
     echo "Copying q-specific config..."
     copy "$DEV_ENV/workdev/env/.gitconfig.local" "$HOME/.gitconfig.local"
     copy "$DEV_ENV/workdev/env/.zshrc.local" "$HOME/.zshrc.local"
+    mkdir -p "$HOME/.local/scripts"
     cp "$DEV_ENV"/workdev/env/.local/scripts/* "$HOME/.local/scripts/"
 fi
 
@@ -169,12 +173,21 @@ mkdir -p "$HOME/.local/bin"
 if [[ "$dry_run" == "0" ]]; then
     if command -v conda &>/dev/null; then
         echo "Conda found, initializing..."
+
+        # Move the 'conda initialize' block out of ~/.zshrc and ~/.bashrc
+        # into the *.local files so the main rc files stay clean.
+        # `sed -i` syntax differs between BSD (mac) and GNU (linux); use a
+        # backup suffix that works on both, then remove the backup.
+        conda_block_start='/>>> conda initialize >>>/'
+        conda_block_end='/<<< conda initialize <<</'
+
         conda init zsh
-        sed -n '/>>> conda initialize >>>/,/<<< conda initialize <<</p' ~/.zshrc >>~/.zshrc.local
-        sed -i '' '/>>> conda initialize >>>/,/<<< conda initialize <<</d' ~/.zshrc
+        sed -n "${conda_block_start},${conda_block_end}p" ~/.zshrc >>~/.zshrc.local
+        sed -i.bak "${conda_block_start},${conda_block_end}d" ~/.zshrc && rm -f ~/.zshrc.bak
+
         conda init bash
-        sed -n '/>>> conda initialize >>>/,/<<< conda initialize <<</p' ~/.bashrc >>~/.bashrc.local
-        sed -i '' '/>>> conda initialize >>>/,/<<< conda initialize <<</d' ~/.zshrc
+        sed -n "${conda_block_start},${conda_block_end}p" ~/.bashrc >>~/.bashrc.local
+        sed -i.bak "${conda_block_start},${conda_block_end}d" ~/.bashrc && rm -f ~/.bashrc.bak
     else
         echo "Conda not found in PATH. Skipping initialization."
     fi
