@@ -1,7 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
 git submodule init
 git submodule update
-pushd env/.config/nvim
+pushd env/.config/nvim &>/dev/null || exit 1
 git checkout main
-popd
-cd ..
-
+popd &>/dev/null || exit 1

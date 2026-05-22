@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
+set -euo pipefail
+
 script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
-if [ -z "$DEV_ENV" ]; then
+if [ -z "${DEV_ENV:-}" ]; then
     echo "env var DEV_ENV needs to be present"
     exit 1
 fi
@@ -10,7 +12,7 @@ fi
 # scripts
 export DEV_ENV="$DEV_ENV"
 
-grep=""
+grep_filter=""
 dry_run="0"
 
 while [[ $# -gt 0 ]]; do
@@ -18,33 +20,34 @@ while [[ $# -gt 0 ]]; do
     if [[ "$1" == "--dry" ]]; then
         dry_run="1"
     else
-        grep="$1"
+        grep_filter="$1"
     fi
     shift
 done
 
 log() {
-    if [[ $dry_run == "1" ]]; then
+    if [[ "$dry_run" == "1" ]]; then
         echo "[DRY_RUN]: $1"
     else
         echo "$1"
     fi
 }
 
-log "RUN: env: $env -- grep: $grep"
+log "RUN: dev_env: $DEV_ENV -- grep: $grep_filter"
 
-runs_dir=`find $script_dir/runs -mindepth 1 -maxdepth 1 -executable`
+# `-executable` is GNU-only; `-perm -u+x` is portable (mac+linux).
+# Note: filter is substring (intentional), e.g. `./run zsh` matches `zsh` and `zsh_plugins`.
+mapfile -t runs_list < <(find "$script_dir/runs" -mindepth 1 -maxdepth 1 -perm -u+x | sort)
 
-for s in $runs_dir; do
-    if basename $s | grep -vq "$grep"; then
-        log "grep \"$grep\" filtered out $s"
+for s in "${runs_list[@]}"; do
+    if basename "$s" | grep -vq -- "$grep_filter"; then
+        log "grep \"$grep_filter\" filtered out $s"
         continue
     fi
 
     log "running script: $s"
 
-    if [[ $dry_run == "0" ]]; then
-        $s
+    if [[ "$dry_run" == "0" ]]; then
+        "$s"
     fi
 done
-

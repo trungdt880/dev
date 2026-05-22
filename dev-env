@@ -1,21 +1,23 @@
 #!/usr/bin/env bash
+set -euo pipefail
+
 dry_run="0"
 YELLOW='\033[33m'
 RED='\033[31m'
 NC='\033[0m' # No Color
 
-if [ -z "$XDG_CONFIG_HOME" ]; then
+if [ -z "${XDG_CONFIG_HOME:-}" ]; then
     echo "no xdg config set"
     echo "using ~/.config"
-    XDG_CONFIG_HOME=$HOME/.config
+    XDG_CONFIG_HOME="$HOME/.config"
 fi
 
-if [ -z "$DEV_ENV" ]; then
+if [ -z "${DEV_ENV:-}" ]; then
     echo "env var DEV_ENV needs to be present"
     exit 1
 fi
 
-if [ -z "$WS" ]; then
+if [ -z "${WS:-}" ]; then
     echo "env var WS needs to be present"
     exit 1
 fi
@@ -25,6 +27,7 @@ is_linux=false
 is_server=false
 is_waiv=false
 is_etri=false
+is_q=false
 
 # Logic based on WS value
 case "$WS" in
@@ -62,99 +65,108 @@ q)
     ;;
 esac
 
-if [[ $1 == "-d" || $1 == "--dry" || $1 == "--dry-run" ]]; then
+if [[ "${1:-}" == "-d" || "${1:-}" == "--dry" || "${1:-}" == "--dry-run" ]]; then
     dry_run="1"
 fi
 
 log() {
-    if [[ $dry_run == "1" ]]; then
+    if [[ "$dry_run" == "1" ]]; then
         echo -e "[DRY_RUN]: $1"
     else
         echo -e "$1"
     fi
 }
 
+# Refuse to remove empty, root, or $HOME paths
+safe_rm() {
+    local target="$1"
+    if [[ -z "$target" || "$target" == "/" || "$target" == "$HOME" ]]; then
+        echo "safe_rm: refusing to remove '$target'" >&2
+        exit 1
+    fi
+    rm -rf -- "$target"
+}
+
 log "env: $DEV_ENV"
 
 update_files() {
     log "copying over files from: $1"
-    pushd $1 &>/dev/null
+    pushd "$1" &>/dev/null || exit 1
     (
         configs=$(find . -mindepth 1 -maxdepth 1 -type d)
         for c in $configs; do
-            directory=${2%/}/${c#./}
+            directory="${2%/}/${c#./}"
             log "    ${RED}removing: rm -rf $directory${NC}"
 
-            if [[ $dry_run == "0" ]]; then
-                rm -rf $directory
+            if [[ "$dry_run" == "0" ]]; then
+                safe_rm "$directory"
             fi
 
             log "    ${YELLOW}copying env: cp $c $2${NC}"
-            if [[ $dry_run == "0" ]]; then
-                cp -r ./$c $2
+            if [[ "$dry_run" == "0" ]]; then
+                cp -r "./$c" "$2"
             fi
         done
 
     )
-    popd &>/dev/null
+    popd &>/dev/null || exit 1
 }
 
 copy() {
     log "${RED}removing: $2${NC}"
-    if [[ $dry_run == "0" ]]; then
-        rm $2
+    if [[ "$dry_run" == "0" ]]; then
+        rm -f -- "$2"
     fi
     log "${YELLOW}copying: $1 to $2${NC}"
-    if [[ $dry_run == "0" ]]; then
-        cp $1 $2
+    if [[ "$dry_run" == "0" ]]; then
+        cp "$1" "$2"
     fi
 }
 
-update_files $DEV_ENV/env/.config $XDG_CONFIG_HOME
-update_files $DEV_ENV/env/.local $HOME/.local
+update_files "$DEV_ENV/env/.config" "$XDG_CONFIG_HOME"
+update_files "$DEV_ENV/env/.local" "$HOME/.local"
 
-copy $DEV_ENV/env/.zsh_aliases $HOME/.zsh_aliases
-copy $DEV_ENV/env/.zsh_profile $HOME/.zsh_profile
-copy $DEV_ENV/env/.zsh_robbyrussell.zsh-theme $HOME/.oh-my-zsh/custom/robbyrussell.zsh-theme
-copy $DEV_ENV/env/.zsh_aliases $HOME/.zsh_aliases
-copy $DEV_ENV/env/.zshrc $HOME/.zshrc
-copy $DEV_ENV/env/.gitconfig $HOME/.gitconfig
-copy $DEV_ENV/env/.tmux.conf $HOME/.tmux.conf
-copy $DEV_ENV/env/.inputrc $HOME/.inputrc
+copy "$DEV_ENV/env/.zsh_aliases" "$HOME/.zsh_aliases"
+copy "$DEV_ENV/env/.zsh_profile" "$HOME/.zsh_profile"
+copy "$DEV_ENV/env/.zsh_robbyrussell.zsh-theme" "$HOME/.oh-my-zsh/custom/robbyrussell.zsh-theme"
+copy "$DEV_ENV/env/.zshrc" "$HOME/.zshrc"
+copy "$DEV_ENV/env/.gitconfig" "$HOME/.gitconfig"
+copy "$DEV_ENV/env/.tmux.conf" "$HOME/.tmux.conf"
+copy "$DEV_ENV/env/.inputrc" "$HOME/.inputrc"
 
 if [ "$is_linux" = true ]; then
     echo "Copying linux-specific config..."
-    update_files $DEV_ENV/env/.config.linux $XDG_CONFIG_HOME
+    update_files "$DEV_ENV/env/.config.linux" "$XDG_CONFIG_HOME"
 
-    copy $DEV_ENV/env/.xprofile $HOME/.xprofile
-    copy $DEV_ENV/env/.gitconfig.local.linux $HOME/.gitconfig.local
-    copy $DEV_ENV/env/.zshrc.local.linux $HOME/.zshrc.local
+    copy "$DEV_ENV/env/.xprofile" "$HOME/.xprofile"
+    copy "$DEV_ENV/env/.gitconfig.local.linux" "$HOME/.gitconfig.local"
+    copy "$DEV_ENV/env/.zshrc.local.linux" "$HOME/.zshrc.local"
 elif [ "$is_mac" = true ]; then
     echo "Copying macOS-specific config..."
-    update_files $DEV_ENV/env/.config.mac $XDG_CONFIG_HOME
+    update_files "$DEV_ENV/env/.config.mac" "$XDG_CONFIG_HOME"
 
-    copy $DEV_ENV/env/.gitconfig.local.mac $HOME/.gitconfig.local
-    copy $DEV_ENV/env/.zshrc.local.mac $HOME/.zshrc.local
+    copy "$DEV_ENV/env/.gitconfig.local.mac" "$HOME/.gitconfig.local"
+    copy "$DEV_ENV/env/.zshrc.local.mac" "$HOME/.zshrc.local"
 elif [ "$is_server" = true ]; then
     echo "Copying server-specific config..."
-    copy $DEV_ENV/env/.gitconfig.local.server $HOME/.gitconfig.local
-    copy $DEV_ENV/env/.zshrc.local.server $HOME/.zshrc.local
+    copy "$DEV_ENV/env/.gitconfig.local.server" "$HOME/.gitconfig.local"
+    copy "$DEV_ENV/env/.zshrc.local.server" "$HOME/.zshrc.local"
 elif [ "$is_waiv" = true ]; then
     echo "Copying server-specific config..."
-    copy $DEV_ENV/env/.gitconfig.local.server $HOME/.gitconfig.local
-    copy $DEV_ENV/env/.zshrc.local.waiv $HOME/.zshrc.local
+    copy "$DEV_ENV/env/.gitconfig.local.server" "$HOME/.gitconfig.local"
+    copy "$DEV_ENV/env/.zshrc.local.waiv" "$HOME/.zshrc.local"
 elif [ "$is_q" = true ]; then
     echo "Copying q-specific config..."
-    copy $DEV_ENV/workdev/env/.gitconfig.local $HOME/.gitconfig.local
-    copy $DEV_ENV/workdev/env/.zshrc.local $HOME/.zshrc.local
-    cp $DEV_ENV/workdev/env/.local/scripts/* $HOME/.local/scripts/
+    copy "$DEV_ENV/workdev/env/.gitconfig.local" "$HOME/.gitconfig.local"
+    copy "$DEV_ENV/workdev/env/.zshrc.local" "$HOME/.zshrc.local"
+    cp "$DEV_ENV"/workdev/env/.local/scripts/* "$HOME/.local/scripts/"
 fi
 
-copy $DEV_ENV/dev-env $HOME/.local/scripts/dev-env
+copy "$DEV_ENV/dev-env" "$HOME/.local/scripts/dev-env"
 
-mkdir -p $HOME/.local/bin
+mkdir -p "$HOME/.local/bin"
 
-if [[ $dry_run == "0" ]]; then
+if [[ "$dry_run" == "0" ]]; then
     if command -v conda &>/dev/null; then
         echo "Conda found, initializing..."
         conda init zsh

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
 sudo apt-get install zsh
 hash -r
-sudo chsh -s $(which zsh)
+sudo chsh -s "$(which zsh)"
 
