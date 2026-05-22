@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+#
+# Install custom fonts referenced in env/ configs.
+#
+# - Nerd Fonts (ryanoasis/nerd-fonts): Hack, Iosevka, FantasqueSansMono,
+#   Hermit (ships as Hurmit*), IBMPlexMono (ships as BlexMono*).
+# - Standalone: Monaspace (githubnext/monaspace),
+#   CommitMono (eigilnikolajsen/commit-mono).
+#
+# Skipped (rely on system / pkg manager): Noto Sans, Comfortaa, feather.
+#
+# Idempotent: skips fonts already present. Re-run safely.
+
+set -euo pipefail
+
+NERD_FONTS=(
+    Hack
+    Iosevka
+    FantasqueSansMono
+    Hermit
+    IBMPlexMono
+)
+
+# --- platform -----------------------------------------------------------------
+
+OS="$(uname -s)"
+case "$OS" in
+    Darwin) FONT_DIR="$HOME/Library/Fonts" ;;
+    Linux)  FONT_DIR="$HOME/.local/share/fonts" ;;
+    *) echo "unsupported OS: $OS" >&2; exit 1 ;;
+esac
+
+mkdir -p "$FONT_DIR"
+
+# --- deps ---------------------------------------------------------------------
+
+for c in curl unzip; do
+    command -v "$c" >/dev/null || { echo "missing dep: $c" >&2; exit 1; }
+done
+
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+
+# --- helpers ------------------------------------------------------------------
+
+# Already installed? Match by filename prefix in font dir (also checks fc-list on Linux).
+have_font() {
+    local needle="$1"
+    if command -v fc-list >/dev/null 2>&1; then
+        fc-list | grep -qi "$needle" && return 0
+    fi
+    find "$FONT_DIR" -maxdepth 3 -type f \( -iname "*${needle}*.ttf" -o -iname "*${needle}*.otf" \) -print -quit | grep -q .
+}
+
+# Latest release tag for repo.
+latest_tag() {
+    curl -fsSL "https://api.github.com/repos/$1/releases/latest" \
+        | grep -oE '"tag_name": *"[^"]+"' | head -1 | cut -d'"' -f4
+}
+
+# First zip asset URL from latest release matching optional regex.
+latest_zip_url() {
+    local repo="$1" pat="${2:-\.zip$}"
+    curl -fsSL "https://api.github.com/repos/$repo/releases/latest" \
+        | grep -oE '"browser_download_url": *"[^"]+\.zip"' \
+        | cut -d'"' -f4 \
+        | grep -Ei "$pat" \
+        | head -1
+}
+
+# Copy all ttf/otf files from a dir tree into FONT_DIR (flat or in subdir).
+install_from_dir() {
+    local src="$1" subdir="${2:-}"
+    local dst="$FONT_DIR${subdir:+/$subdir}"
+    mkdir -p "$dst"
+    find "$src" -type f \( -iname '*.ttf' -o -iname '*.otf' \) -exec cp -f {} "$dst" \;
+}
+
+# --- installers ---------------------------------------------------------------
+
+install_nerd_font() {
+    local name="$1" probe="$1"
+    # Some Nerd Font zips rename internally — adjust probe so have_font matches.
+    case "$name" in
+        Hermit)       probe=Hurmit ;;
+        IBMPlexMono)  probe=BlexMono ;;
+    esac
+
+    if have_font "$probe"; then
+        echo "[skip] NerdFont $name ($probe already installed)"
+        return
+    fi
+    echo "[get]  NerdFont $name"
+    local tag url zip
+    tag="$(latest_tag ryanoasis/nerd-fonts)"
+    url="https://github.com/ryanoasis/nerd-fonts/releases/download/${tag}/${name}.zip"
+    zip="$TMP/${name}.zip"
+    curl -fSL "$url" -o "$zip"
+    mkdir -p "$TMP/$name"
+    unzip -oq "$zip" -d "$TMP/$name" -x '*.md' '*.txt' 'LICENSE*' 'readme*'
+    install_from_dir "$TMP/$name" "$name"
+}
+
+install_monaspace() {
+    if have_font Monaspace; then
+        echo "[skip] Monaspace (already installed)"
+        return
+    fi
+    echo "[get]  Monaspace"
+    local url zip
+    url="$(latest_zip_url githubnext/monaspace 'monaspace.*\.zip')"
+    [[ -n "$url" ]] || { echo "monaspace: no zip asset found" >&2; return 1; }
+    zip="$TMP/monaspace.zip"
+    curl -fSL "$url" -o "$zip"
+    mkdir -p "$TMP/monaspace"
+    unzip -oq "$zip" -d "$TMP/monaspace"
+    install_from_dir "$TMP/monaspace" Monaspace
+}
+
+install_commitmono() {
+    if have_font CommitMono; then
+        echo "[skip] CommitMono (already installed)"
+        return
+    fi
+    echo "[get]  CommitMono"
+    local url zip
+    url="$(latest_zip_url eigilnikolajsen/commit-mono 'CommitMono.*\.zip')"
+    [[ -n "$url" ]] || { echo "CommitMono: no zip asset found" >&2; return 1; }
+    zip="$TMP/commitmono.zip"
+    curl -fSL "$url" -o "$zip"
+    mkdir -p "$TMP/commitmono"
+    unzip -oq "$zip" -d "$TMP/commitmono"
+    install_from_dir "$TMP/commitmono" CommitMono
+}
+
+# --- run ----------------------------------------------------------------------
+
+for f in "${NERD_FONTS[@]}"; do
+    install_nerd_font "$f"
+done
+install_monaspace
+install_commitmono
+
+if [[ "$OS" == "Linux" ]] && command -v fc-cache >/dev/null 2>&1; then
+    echo "Refreshing font cache..."
+    fc-cache -f "$FONT_DIR"
+fi
+
+echo "Done. Installed to: $FONT_DIR"
