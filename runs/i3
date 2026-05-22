@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# apparently it may be one or the other...
-sudo apt install i3-wm
-sudo apt install i3
+OS="$(uname -s)"
+if [[ "$OS" != "Linux" ]]; then
+    echo "[skip] i3 is Linux-only (OS=$OS)"
+    exit 0
+fi
+
+# i3 and i3-wm — same package, different distro names. Try both.
+sudo apt install -y i3 || sudo apt install -y i3-wm

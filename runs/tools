@@ -2,6 +2,28 @@
 
 set -euo pipefail
 
+OS="$(uname -s)"
+
+# On macOS, Homebrew is the cleanest path — and we don't have the sudo
+# constraint we have on remote linux boxes. Install all tools via brew
+# and exit.
+if [[ "$OS" == "Darwin" ]]; then
+    command -v brew >/dev/null 2>&1 || {
+        echo "brew required on macOS; run ./run _brew first" >&2
+        exit 1
+    }
+    brew install fd bat ripgrep eza yazi git-delta zoxide lazygit neovim
+    echo "✔ tools installed via brew"
+    exit 0
+fi
+
+if [[ "$OS" != "Linux" ]]; then
+    echo "Unsupported OS: $OS" >&2
+    exit 1
+fi
+
+# --- Linux: download static binaries from GitHub releases (no sudo) ----------
+
 mkdir -p ~/.local/bin
 LOCAL_BIN="$HOME/.local/bin"
 TMP_DIR="/tmp/cli-install"
@@ -38,7 +60,7 @@ install_fd() {
     esac
     URL="https://github.com/sharkdp/fd/releases/download/${LATEST}/fd-${LATEST}-${ARCH_TYPE}.tar.gz"
     curl -LO "$URL"
-    tar -xf fd-${LATEST}-${ARCH_TYPE}.tar.gz
+    tar -xf "fd-${LATEST}-${ARCH_TYPE}.tar.gz"
     cp "fd-${LATEST}-${ARCH_TYPE}/fd" "$LOCAL_BIN"
     chmod +x "$LOCAL_BIN/fd"
     echo "✔ fd installed to $LOCAL_BIN"
@@ -66,7 +88,7 @@ install_bat() {
     esac
     URL="https://github.com/sharkdp/bat/releases/download/${LATEST}/bat-${LATEST}-${ARCH_TYPE}.tar.gz"
     curl -LO "$URL"
-    tar -xf bat-${LATEST}-${ARCH_TYPE}.tar.gz
+    tar -xf "bat-${LATEST}-${ARCH_TYPE}.tar.gz"
     cp "bat-${LATEST}-${ARCH_TYPE}/bat" "$LOCAL_BIN"
     chmod +x "$LOCAL_BIN/bat"
     echo "✔ bat installed to $LOCAL_BIN"
@@ -94,7 +116,7 @@ install_rg() {
     esac
     URL="https://github.com/BurntSushi/ripgrep/releases/download/${LATEST}/ripgrep-${LATEST}-${ARCH_TYPE}.tar.gz"
     curl -LO "$URL"
-    tar -xf ripgrep-${LATEST}-${ARCH_TYPE}.tar.gz
+    tar -xf "ripgrep-${LATEST}-${ARCH_TYPE}.tar.gz"
     cp "ripgrep-${LATEST}-${ARCH_TYPE}/rg" "$LOCAL_BIN"
     chmod +x "$LOCAL_BIN/rg"
     echo "✔ ripgrep installed to $LOCAL_BIN"
@@ -218,7 +240,7 @@ install_yazi() {
 
     URL="https://github.com/sxyazi/yazi/releases/download/${LATEST}/yazi-${ARCH_TYPE}.zip"
     curl -LO "$URL"
-    unzip -q yazi-${ARCH_TYPE}.zip
+    unzip -q "yazi-${ARCH_TYPE}.zip"
     cp "yazi-${ARCH_TYPE}/yazi" "$LOCAL_BIN"
     chmod +x "$LOCAL_BIN/yazi"
     echo "✔ yazi installed to $LOCAL_BIN"
@@ -242,7 +264,7 @@ install_delta() {
 
     URL="https://github.com/dandavison/delta/releases/download/${LATEST}/delta-${LATEST}-${ARCH_TYPE}.tar.gz"
     curl -LO "$URL"
-    tar -xf delta-${LATEST}-${ARCH_TYPE}.tar.gz
+    tar -xf "delta-${LATEST}-${ARCH_TYPE}.tar.gz"
     cp "delta-${LATEST}-${ARCH_TYPE}/delta" "$LOCAL_BIN"
     chmod +x "$LOCAL_BIN/delta"
     echo "✔ delta installed to $LOCAL_BIN"
@@ -267,7 +289,7 @@ install_zoxide() {
 
     URL="https://github.com/ajeetdsouza/zoxide/releases/download/${LATEST}/zoxide-${LATEST_NO_V}-${ARCH_TYPE}.tar.gz"
     wget "$URL"
-    tar -xf zoxide-${LATEST_NO_V}-${ARCH_TYPE}.tar.gz
+    tar -xf "zoxide-${LATEST_NO_V}-${ARCH_TYPE}.tar.gz"
     cp "zoxide" "$LOCAL_BIN"
     chmod +x "$LOCAL_BIN/zoxide"
     echo "✔ zoxide installed to $LOCAL_BIN"
@@ -292,7 +314,7 @@ install_lazygit() {
 
     URL="https://github.com/jesseduffield/lazygit/releases/download/${LATEST}/lazygit_${LATEST_NO_V}_${ARCH_TYPE}.tar.gz"
     curl -LO "$URL"
-    tar xf lazygit_${LATEST_NO_V}_${ARCH_TYPE}.tar.gz
+    tar xf "lazygit_${LATEST_NO_V}_${ARCH_TYPE}.tar.gz"
     cp lazygit "$LOCAL_BIN"
     chmod +x "$LOCAL_BIN/lazygit"
     echo "✔ lazygit installed to $LOCAL_BIN"

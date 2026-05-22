@@ -1,7 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-sudo apt-get install zsh
-hash -r
-sudo chsh -s "$(which zsh)"
+OS="$(uname -s)"
 
+case "$OS" in
+    Linux)
+        sudo apt-get install -y zsh
+        hash -r
+        sudo chsh -s "$(command -v zsh)" "$USER"
+        ;;
+    Darwin)
+        # zsh is built-in on macOS; just make sure it's the login shell.
+        ZSH_BIN="$(command -v zsh)"
+        if [[ "${SHELL:-}" != "$ZSH_BIN" ]]; then
+            chsh -s "$ZSH_BIN"
+        else
+            echo "[skip] zsh already the login shell"
+        fi
+        ;;
+    *) echo "Unsupported OS: $OS" >&2; exit 1 ;;
+esac

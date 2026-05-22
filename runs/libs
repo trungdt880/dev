@@ -1,5 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-sudo apt -y update
-sudo apt -y install git ripgrep pavucontrol xclip jq tldr shutter python3-pip
+OS="$(uname -s)"
+
+case "$OS" in
+    Linux)
+        sudo apt -y update
+        sudo apt -y install git ripgrep pavucontrol xclip jq tldr shutter python3-pip
+        ;;
+    Darwin)
+        command -v brew >/dev/null 2>&1 || { echo "brew required on macOS; run ./run _brew first" >&2; exit 1; }
+        # pavucontrol, xclip, shutter are Linux-only — skipped on mac.
+        brew install git ripgrep jq tldr
+        ;;
+    *) echo "Unsupported OS: $OS" >&2; exit 1 ;;
+esac

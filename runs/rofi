@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-sudo apt install rofi
+OS="$(uname -s)"
+if [[ "$OS" != "Linux" ]]; then
+    echo "[skip] rofi is Linux-only (OS=$OS)"
+    exit 0
+fi
 
+sudo apt install -y rofi
