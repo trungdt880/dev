@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+#
+# Migrate a clone from the pre-restructure layout to the new layered tree.
+#
+# Old layout:                       New layout:
+#   env/.config/<tool>/               env/base/.config/<tool>/  (mostly)
+#   env/.config.mac/                  env/desktop/mac/.config/
+#   env/.config.linux/                env/desktop/linux/.config/
+#   env/.config/nvim     (submod)     env/base/.config/nvim     (submod, moved)
+#   env/.zshrc                        env/base/.zshrc
+#   env/.zshrc.local.<ws>             env/desktop/<ws>/ or host/<ws>/
+#
+# Run this once on each machine that had the old layout. Safe to re-run —
+# idempotent and only touches state that's actually stale.
+
+set -euo pipefail
+
+if [ -z "${DEV_ENV:-}" ]; then
+    echo "env var DEV_ENV needs to be present" >&2
+    exit 1
+fi
+
+cd "$DEV_ENV"
+
+# 1. Pull latest main so .gitmodules has the new submodule path before we
+#    touch anything submodule-related.
+echo "==> Pulling latest main..."
+git pull --ff-only
+
+# 2. Clean up the submodule at its old path if anything is left behind.
+NVIM_OLD="env/.config/nvim"
+NVIM_NEW="env/base/.config/nvim"
+
+if [ -e "$NVIM_OLD" ]; then
+    echo "==> Removing stale submodule worktree at $NVIM_OLD"
+    git submodule deinit -f "$NVIM_OLD" 2>/dev/null || true
+    rm -rf "$NVIM_OLD"
+fi
+
+if [ -d ".git/modules/env/.config/nvim" ]; then
+    echo "==> Removing stale .git/modules data for old nvim path"
+    rm -rf .git/modules/env/.config/nvim
+    # Clean up now-empty parent dirs (best-effort)
+    rmdir .git/modules/env/.config 2>/dev/null || true
+fi
+
+# 3. Sync .git/config to match .gitmodules, then init/update at new path.
+echo "==> Syncing submodule config and re-initializing at $NVIM_NEW"
+git submodule sync
+git submodule update --init --recursive
+
+# 4. Sanity check the nvim submodule is on the expected branch.
+if [ -d "$NVIM_NEW/.git" ] || [ -f "$NVIM_NEW/.git" ]; then
+    pushd "$NVIM_NEW" &>/dev/null || exit 1
+    git checkout main 2>/dev/null || echo "[warn] could not checkout main inside nvim submodule"
+    popd &>/dev/null || exit 1
+fi
+
+# 5. Remove leftover empty old layer dirs (only if truly empty — never
+#    rmrf, never touch a dir that still has user state).
+for d in env/.config env/.config.mac env/.config.linux env/.local; do
+    if [ -d "$d" ]; then
+        # rmdir only removes empty dirs. Anything still in there stays put.
+        rmdir "$d" 2>/dev/null && echo "==> Removed empty $d" || true
+    fi
+done
+
+echo ""
+echo "✔ Migration complete."
+echo "  Now re-run dotfiles provisioning with the usual:"
+echo "    ./dev-env --dry   # preview"
+echo "    ./dev-env         # apply"

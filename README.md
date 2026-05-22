@@ -123,6 +123,19 @@ nested singletons like `.oh-my-zsh/custom/<theme>`.
 | `zsh`          | apt + chsh                   | chsh (built-in)                |
 | `zsh_plugins`  | oh-my-zsh + plugins          | same                           |
 
+## Migrating an old clone
+
+If you're pulling onto a machine that had the pre-restructure layout
+(`env/.config/`, `env/.config.mac/`, etc.), run:
+
+```bash
+DEV_ENV="$(pwd)" ./migrate-legacy
+```
+
+It pulls, removes the stale nvim submodule worktree at the old path,
+re-inits it at `env/base/.config/nvim`, and cleans up empty leftover
+dirs. Idempotent — safe to re-run.
+
 ## Linting
 
 ```bash
