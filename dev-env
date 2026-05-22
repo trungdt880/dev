@@ -1,10 +1,31 @@
 #!/usr/bin/env bash
+#
+# Provision dotfiles for the current workstation by composing layers.
+#
+# Layers (each mirrors $HOME):
+#   env/base/             — always applied; safe on bare servers
+#   env/desktop/common/   — GUI tools shared between mac and linux personal
+#   env/desktop/mac/      — mac-only GUI
+#   env/desktop/linux/    — linux-only GUI
+#   env/host/<ws>/        — per-headless-host tweaks
+#
+# Workstation -> ordered layer list lives in WS_LAYERS below.
+# Later layers overwrite earlier ones for files that collide.
+#
+# Two copy semantics inside apply_layer:
+#   - .config/<tool>/   wipe-and-replace the whole tool dir (atomic).
+#                       Each tool dir is owned by exactly one layer.
+#   - everything else   file-level mirror at arbitrary depth (merge).
+#                       Top-level dotfiles, .local/scripts/*, deeply nested
+#                       singletons like .oh-my-zsh/custom/<theme> compose
+#                       across layers.
+
 set -euo pipefail
 
 dry_run="0"
 YELLOW='\033[33m'
 RED='\033[31m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 if [ -z "${XDG_CONFIG_HOME:-}" ]; then
     echo "no xdg config set"
@@ -13,63 +34,47 @@ if [ -z "${XDG_CONFIG_HOME:-}" ]; then
 fi
 
 if [ -z "${DEV_ENV:-}" ]; then
-    echo "env var DEV_ENV needs to be present"
+    echo "env var DEV_ENV needs to be present" >&2
     exit 1
 fi
 
 if [ -z "${WS:-}" ]; then
-    echo "env var WS needs to be present"
+    echo "env var WS needs to be present" >&2
     exit 1
 fi
 
-is_mac=false
-is_linux=false
-is_server=false
-is_waiv=false
-is_etri=false
-is_q=false
+if [[ "${1:-}" == "-d" || "${1:-}" == "--dry" || "${1:-}" == "--dry-run" ]]; then
+    dry_run="1"
+fi
 
-# Logic based on WS value
-case "$WS" in
-mac)
-    echo "Detected macOS environment via WS=$WS"
-    is_mac=true
-    ;;
-linux)
-    echo "Detected Linux environment via WS=$WS"
-    is_linux=true
-    ;;
-server)
-    echo "Detected server environment via WS=$WS"
-    is_server=true
-    ;;
-waiv)
-    echo "Detected server environment via WS=$WS"
-    is_waiv=true
-    ;;
-etri)
-    echo "Detected server environment via WS=$WS"
-    is_etri=true
-    ;;
-q)
-    # Q environment uses a separate private-creds repo cloned at $DEV_ENV/workdev.
-    # That repo carries workdev/env/.gitconfig.local, .zshrc.local, and helper
-    # scripts under .local/scripts/ — applied later in this script.
-    echo "Detected Q environment via WS=$WS"
+# Workstation -> ordered layer paths (relative to $DEV_ENV/env/).
+declare -A WS_LAYERS=(
+    [mac]="base desktop/common desktop/mac"
+    [linux]="base desktop/common desktop/linux"
+    [server]="base host/server"
+    [waiv]="base host/waiv"
+    [etri]="base host/etri"
+    [q]="base host/q"
+)
+
+if [[ -z "${WS_LAYERS[$WS]:-}" ]]; then
+    echo "Warning: Unknown WS environment value: $WS" >&2
+    exit 1
+fi
+
+echo "Detected workstation: WS=$WS"
+
+# Q uses a separate private-creds repo at $DEV_ENV/workdev; its env/ tree
+# is appended as the last layer so its files override base.
+extra_layers=()
+if [[ "$WS" == "q" ]]; then
     if [ ! -d "$DEV_ENV/workdev" ]; then
         echo "Error: \$DEV_ENV/workdev does not exist. Clone the private repo there first." >&2
         exit 1
     fi
-    is_q=true
-    ;;
-*)
-    echo "Warning: Unknown WS environment value: $WS"
-    exit 1
-    ;;
-esac
-
-if [[ "${1:-}" == "-d" || "${1:-}" == "--dry" || "${1:-}" == "--dry-run" ]]; then
-    dry_run="1"
+    if [ -d "$DEV_ENV/workdev/env" ]; then
+        extra_layers+=("$DEV_ENV/workdev/env")
+    fi
 fi
 
 log() {
@@ -90,83 +95,73 @@ safe_rm() {
     rm -rf -- "$target"
 }
 
+apply_layer() {
+    local layer="$1"
+    local layer_name
+    if [[ "$layer" == "$DEV_ENV/"* ]]; then
+        layer_name="${layer#"$DEV_ENV/"}"
+    else
+        layer_name="$layer"
+    fi
+
+    if [[ ! -d "$layer" ]]; then
+        log "[skip layer] $layer_name (no such directory)"
+        return 0
+    fi
+
+    log "${YELLOW}=== applying layer: $layer_name ===${NC}"
+
+    # 1. .config/<tool>/ — wipe-and-replace per top-level entry.
+    if [[ -d "$layer/.config" ]]; then
+        while IFS= read -r -d '' src; do
+            local name dst
+            name="$(basename "$src")"
+            dst="${XDG_CONFIG_HOME%/}/$name"
+            log "  ${RED}[wipe] $dst${NC} (owned by: $layer_name)"
+            if [[ "$dry_run" == "0" ]]; then
+                safe_rm "$dst"
+            fi
+            log "  ${YELLOW}[copy] .config/$name -> $dst${NC}"
+            if [[ "$dry_run" == "0" ]]; then
+                cp -r "$src" "$dst"
+            fi
+        done < <(find "$layer/.config" -mindepth 1 -maxdepth 1 -print0)
+    fi
+
+    # 2. All other files — file-level mirror at arbitrary depth.
+    while IFS= read -r -d '' src; do
+        local rel dst
+        rel="${src#"$layer/"}"
+        dst="$HOME/$rel"
+        if [[ "$dry_run" == "0" ]]; then
+            mkdir -p "$(dirname "$dst")"
+        fi
+        log "  ${YELLOW}[file] $rel -> $dst${NC} (owned by: $layer_name)"
+        if [[ "$dry_run" == "0" ]]; then
+            rm -f -- "$dst"
+            cp "$src" "$dst"
+        fi
+    done < <(find "$layer" -mindepth 1 \( -type f -o -type l \) -not -path "$layer/.config/*" -not -name '.gitkeep' -print0)
+}
+
 log "env: $DEV_ENV"
 
-update_files() {
-    log "copying over files from: $1"
-    pushd "$1" &>/dev/null || exit 1
-    (
-        configs=$(find . -mindepth 1 -maxdepth 1 -type d)
-        for c in $configs; do
-            directory="${2%/}/${c#./}"
-            log "    ${RED}removing: rm -rf $directory${NC}"
+# Apply layers in declared order; last layer wins for any colliding file.
+read -r -a layers <<< "${WS_LAYERS[$WS]}"
+for L in "${layers[@]}"; do
+    apply_layer "$DEV_ENV/env/$L"
+done
+for L in "${extra_layers[@]}"; do
+    apply_layer "$L"
+done
 
-            if [[ "$dry_run" == "0" ]]; then
-                safe_rm "$directory"
-            fi
-
-            log "    ${YELLOW}copying env: cp $c $2${NC}"
-            if [[ "$dry_run" == "0" ]]; then
-                cp -r "./$c" "$2"
-            fi
-        done
-
-    )
-    popd &>/dev/null || exit 1
-}
-
-copy() {
-    log "${RED}removing: $2${NC}"
-    if [[ "$dry_run" == "0" ]]; then
-        rm -f -- "$2"
-    fi
-    log "${YELLOW}copying: $1 to $2${NC}"
-    if [[ "$dry_run" == "0" ]]; then
-        cp "$1" "$2"
-    fi
-}
-
-update_files "$DEV_ENV/env/.config" "$XDG_CONFIG_HOME"
-update_files "$DEV_ENV/env/.local" "$HOME/.local"
-
-copy "$DEV_ENV/env/.zsh_aliases" "$HOME/.zsh_aliases"
-copy "$DEV_ENV/env/.zsh_profile" "$HOME/.zsh_profile"
-copy "$DEV_ENV/env/.zsh_robbyrussell.zsh-theme" "$HOME/.oh-my-zsh/custom/robbyrussell.zsh-theme"
-copy "$DEV_ENV/env/.zshrc" "$HOME/.zshrc"
-copy "$DEV_ENV/env/.gitconfig" "$HOME/.gitconfig"
-copy "$DEV_ENV/env/.tmux.conf" "$HOME/.tmux.conf"
-copy "$DEV_ENV/env/.inputrc" "$HOME/.inputrc"
-
-if [ "$is_linux" = true ]; then
-    echo "Copying linux-specific config..."
-    update_files "$DEV_ENV/env/.config.linux" "$XDG_CONFIG_HOME"
-
-    copy "$DEV_ENV/env/.xprofile" "$HOME/.xprofile"
-    copy "$DEV_ENV/env/.gitconfig.local.linux" "$HOME/.gitconfig.local"
-    copy "$DEV_ENV/env/.zshrc.local.linux" "$HOME/.zshrc.local"
-elif [ "$is_mac" = true ]; then
-    echo "Copying macOS-specific config..."
-    update_files "$DEV_ENV/env/.config.mac" "$XDG_CONFIG_HOME"
-
-    copy "$DEV_ENV/env/.gitconfig.local.mac" "$HOME/.gitconfig.local"
-    copy "$DEV_ENV/env/.zshrc.local.mac" "$HOME/.zshrc.local"
-elif [ "$is_server" = true ]; then
-    echo "Copying server-specific config..."
-    copy "$DEV_ENV/env/.gitconfig.local.server" "$HOME/.gitconfig.local"
-    copy "$DEV_ENV/env/.zshrc.local.server" "$HOME/.zshrc.local"
-elif [ "$is_waiv" = true ]; then
-    echo "Copying server-specific config..."
-    copy "$DEV_ENV/env/.gitconfig.local.server" "$HOME/.gitconfig.local"
-    copy "$DEV_ENV/env/.zshrc.local.waiv" "$HOME/.zshrc.local"
-elif [ "$is_q" = true ]; then
-    echo "Copying q-specific config..."
-    copy "$DEV_ENV/workdev/env/.gitconfig.local" "$HOME/.gitconfig.local"
-    copy "$DEV_ENV/workdev/env/.zshrc.local" "$HOME/.zshrc.local"
-    mkdir -p "$HOME/.local/scripts"
-    cp "$DEV_ENV"/workdev/env/.local/scripts/* "$HOME/.local/scripts/"
+# Always ship the canonical dev-env script into ~/.local/scripts so it
+# can be run from anywhere.
+mkdir -p "$HOME/.local/scripts"
+log "${YELLOW}[file] dev-env -> $HOME/.local/scripts/dev-env${NC}"
+if [[ "$dry_run" == "0" ]]; then
+    cp "$DEV_ENV/dev-env" "$HOME/.local/scripts/dev-env"
 fi
-
-copy "$DEV_ENV/dev-env" "$HOME/.local/scripts/dev-env"
 
 mkdir -p "$HOME/.local/bin"
 
@@ -174,10 +169,9 @@ if [[ "$dry_run" == "0" ]]; then
     if command -v conda &>/dev/null; then
         echo "Conda found, initializing..."
 
-        # Move the 'conda initialize' block out of ~/.zshrc and ~/.bashrc
-        # into the *.local files so the main rc files stay clean.
-        # `sed -i` syntax differs between BSD (mac) and GNU (linux); use a
-        # backup suffix that works on both, then remove the backup.
+        # Move the 'conda initialize' block out of ~/.zshrc / ~/.bashrc into
+        # the *.local files so the main rc files stay clean. `sed -i` syntax
+        # differs between BSD (mac) and GNU (linux); -i.bak works on both.
         conda_block_start='/>>> conda initialize >>>/'
         conda_block_end='/<<< conda initialize <<</'
 
