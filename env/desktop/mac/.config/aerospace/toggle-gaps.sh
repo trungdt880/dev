@@ -11,7 +11,7 @@ state=$(cat "$STATE" 2>/dev/null || echo on)
 if [ "$state" = on ]; then
   next=off; g=0; top=0
 else
-  next=on; g=10; top='[{ monitor.built-in = 16 }, 40]'
+  next=on; g=10; top='[{ monitor.built-in = 16 }, 52]'
 fi
 
 # BSD awk (macOS) forbids newlines in -v vars, so build the block line-by-line.

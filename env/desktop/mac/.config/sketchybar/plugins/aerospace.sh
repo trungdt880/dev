@@ -1,39 +1,32 @@
 #!/usr/bin/env bash
 
-# make sure it's executable with:
-# chmod +x ~/.config/sketchybar/plugins/aerospace.sh
+# Make executable: chmod +x ~/.config/sketchybar/plugins/aerospace.sh
 
-export TRANSPARENT_WHITE=0xFFF8C8DC
-export ACCENT_COLOR=0xFFFC81B4
-export ACCENT_COLOR=0xffE0A3AD
+source "$HOME/.config/sketchybar/colors.sh"
 
-args=()
-if [ "$NAME" != "space_template" ]; then
-  sid=${NAME#space.}
-  napps=$(aerospace list-windows --workspace $sid | wc -l)
-  if [ $napps -gt 0 ]; then
-    icon_=
-    fontsize=18
-    yoffset=1.5
-  else
-    icon_=◯
-    fontsize=25
-    yoffset=3.5
-  fi
-  args+=(--set $NAME label=$NAME
-    icon=$icon_
-    icon.font="Hack Nerd Font:Regular:$fontsize.0"
-    icon.color=$TRANSPARENT_WHITE
-    icon.y_offset=$yoffset
-  )
-fi
+# Same-size geometric glyphs => identical baseline => perfect alignment.
+FILLED=$(printf '\342\227\217')  # U+25CF ●  black circle
+HOLLOW=$(printf '\342\227\213')  # U+25CB ○  white circle
+
+# Uniform font/offset for every state; only glyph + color change.
+FONT="Hack Nerd Font:Regular:16.0"
+
+sid=${NAME#space.}
+napps=$(aerospace list-windows --workspace "$sid" --count)
 
 if [ "$1" = "$FOCUSED_WORKSPACE" ]; then
-  sid=$(($DID + 1))
-  args+=(--set space.$sid label=${NAME#"space.$sid"})
-  args+=(--set $NAME icon= icon.color=$ACCENT_COLOR icon.font="Hack Nerd Font:Regular:20.0" icon.y_offset=-0.5)
+  icon=$FILLED                 # focused: filled accent
+  color=$ACCENT
+elif [ "$napps" -gt 0 ]; then
+  icon=$FILLED                 # occupied: filled muted
+  color=$OVERLAY0
 else
-  args+=(--set $NAME)
+  icon=$HOLLOW                 # empty: hollow ring
+  color=$OVERLAY0
 fi
 
-sketchybar -m --animate tanh 5 "${args[@]}"
+sketchybar -m --animate tanh 5 --set "$NAME" \
+  icon="$icon" \
+  icon.color="$color" \
+  icon.font="$FONT" \
+  icon.y_offset=0

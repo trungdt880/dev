@@ -28,11 +28,9 @@
 #
 # Get Wi-Fi network information
 WI_FI_INFO=$(networksetup -listallhardwareports | awk '/Wi-Fi/{getline; print $2}')
-echo $WI_FI_INFO
 
 # Get the current Wi-Fi network
 CURRENT_NETWORK=$(echo "$WI_FI_INFO" | xargs networksetup -getairportnetwork | sed "s/Current Wi-Fi Network: //")
-echo $CURRENT_NETWORK
 
 # Check if the current network is associated with an airport network
 if echo "$CURRENT_NETWORK" | grep -q "You are not associated with an AirPort network"; then
