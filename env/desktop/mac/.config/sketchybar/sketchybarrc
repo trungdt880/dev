@@ -25,17 +25,17 @@ sketchybar --bar height=32 \
 
 ############## GLOBAL DEFAULTS ##############
 sketchybar --default updates=when_shown \
-                     icon.font="Hack Nerd Font:Bold:14.0" \
+                     icon.font="CaskaydiaCove Nerd Font:Bold:13.0" \
                      icon.color=$ICON_COLOR \
                      icon.highlight_color=$ACCENT \
-                     label.font="Hack Nerd Font:Bold:13.0" \
+                     label.font="CaskaydiaCove Nerd Font:Bold:15.0" \
                      label.color=$LABEL_COLOR \
                      label.padding_left=4 \
                      label.padding_right=4 \
                      icon.padding_left=6 \
                      icon.padding_right=6 \
                      background.corner_radius=8 \
-                     background.height=24 \
+                     background.height=17 \
                      background.padding_left=4 \
                      background.padding_right=4 \
                      padding_left=2 \
@@ -51,8 +51,8 @@ sketchybar --add item logo left \
                       icon.padding_left=8 \
                       icon.padding_right=6 \
                       background.color=$TRANSPARENT \
-                      background.padding_right=2 \
-                      background.padding_left=2 \
+                      padding_left=12 \
+                      padding_right=2 \
                       click_script="sketchybar --update"
 
 ############## WORKSPACES (aerospace) ##############
@@ -72,7 +72,7 @@ for m in $(aerospace list-monitors | awk '{print $1}'); do
           --subscribe space.$sid aerospace_workspace_change \
           --set space.$sid \
           icon=○ \
-          icon.font="Hack Nerd Font:Regular:16.0" \
+          icon.font="Hack Nerd Font:Regular:20.0" \
           icon.color=$OVERLAY0 \
           icon.highlight_color=$ACCENT \
           icon.padding_left=5 \
@@ -87,22 +87,108 @@ for m in $(aerospace list-monitors | awk '{print $1}'); do
   done
 done
 
+# Invisible spacer = right gap inside the left island (bump `width` to taste).
+sketchybar --add item left_pad left \
+           --set left_pad width=8 \
+                          background.drawing=off \
+                          icon.drawing=off \
+                          label.drawing=off
+SPACE_ITEMS+=(left_pad)
+
 # Left island: cat logo + workspace dots on one floating, blurred bracket.
 sketchybar --add bracket left_island logo "${SPACE_ITEMS[@]}" \
            --set left_island background.color=$BAR_COLOR \
                              background.corner_radius=12 \
-                             background.height=28 \
-                             background.padding_left=8 \
-                             background.padding_right=8 \
-                             background.y_offset=1 \
+                             background.height=30 \
+                             background.y_offset=-1 \
                              background.drawing=on \
-                             blur_radius=30 \
-                             background.shadow.drawing=on \
-                             background.shadow.color=$SHADOW_COLOR \
-                             background.shadow.distance=4
+                             blur_radius=0 \
+                             background.shadow.drawing=off
 
-############## CENTER: SPOTIFY (disabled) ##############
-# source "$CONFIG_DIR/plugins/spotify.sh"
+############## CENTER: NOW PLAYING (external displays only) ##############
+# Browser/system media via nowplaying-cli (YouTube Music, Spotify, etc.).
+# Skipped on the built-in (notch) display so it never fights the notch; only
+# drawn on an external monitor. Laptop-only => no island at all.
+# Spotify popup island disabled: # source "$CONFIG_DIR/plugins/spotify.sh"
+NP="$CONFIG_DIR/plugins/nowplaying.sh"
+
+# First non-built-in monitor (skip the notch display). No process substitution
+# so it stays /bin/sh-safe.
+EXTERNAL_MID=$(aerospace list-monitors --format '%{monitor-id} %{monitor-name}' \
+                 | grep -vi 'built-in' | head -1 | awk '{print $1}')
+EXTERNAL_DISPLAY=""
+[ -n "$EXTERNAL_MID" ] && EXTERNAL_DISPLAY="${monitors[$EXTERNAL_MID]}"
+
+if [ -n "$EXTERNAL_DISPLAY" ]; then
+  sketchybar --add item media.title center \
+             --set media.title update_freq=3 \
+                               display=$EXTERNAL_DISPLAY \
+                               script="$NP" \
+                               click_script="$NP" \
+                               icon.color=$GREEN \
+                               icon.padding_left=10 \
+                               icon.padding_right=4 \
+                               label.color=$TEXT \
+                               label.width=200 \
+                               label.align=left \
+                               background.color=$TRANSPARENT \
+                               padding_left=2 \
+                               padding_right=2 \
+                               drawing=off \
+             --subscribe media.title mouse.clicked \
+             \
+             --add item media.prev center \
+             --set media.prev icon="$(printf '\357\201\210')" \
+                              display=$EXTERNAL_DISPLAY \
+                              icon.color=$SUBTEXT0 \
+                              label.drawing=off \
+                              script="$NP" \
+                              background.color=$TRANSPARENT \
+                              padding_left=4 \
+                              padding_right=2 \
+                              drawing=off \
+             --subscribe media.prev mouse.clicked \
+             \
+             --add item media.play center \
+             --set media.play icon="$(printf '\357\201\213')" \
+                              display=$EXTERNAL_DISPLAY \
+                              icon.color=$TEXT \
+                              label.drawing=off \
+                              script="$NP" \
+                              background.color=$TRANSPARENT \
+                              padding_left=2 \
+                              padding_right=2 \
+                              drawing=off \
+             --subscribe media.play mouse.clicked \
+             \
+             --add item media.next center \
+             --set media.next icon="$(printf '\357\201\221')" \
+                              display=$EXTERNAL_DISPLAY \
+                              icon.color=$SUBTEXT0 \
+                              label.drawing=off \
+                              script="$NP" \
+                              background.color=$TRANSPARENT \
+                              padding_left=2 \
+                              padding_right=10 \
+                              drawing=off \
+             --subscribe media.next mouse.clicked
+
+  sketchybar --add bracket center_island media.title media.prev media.play media.next \
+             --set center_island display=$EXTERNAL_DISPLAY \
+                                 background.color=$BAR_COLOR \
+                                 background.corner_radius=12 \
+                                 background.height=30 \
+                                 background.y_offset=1 \
+                                 background.drawing=on \
+                                 blur_radius=0 \
+                                 background.shadow.drawing=off \
+                                 drawing=off
+
+  # Marquee daemon (sketchybar can't scroll sub-second); restart cleanly.
+  pkill -f 'plugins/np_scroll.sh' 2>/dev/null
+  nohup bash "$CONFIG_DIR/plugins/np_scroll.sh" >/dev/null 2>&1 &
+  disown 2>/dev/null
+fi
 
 ############## RIGHT ITEMS ##############
 # Layout per group: [colored icon chip][value label].
@@ -118,7 +204,7 @@ sketchybar --add item battery right \
                          label.color=$TEXT \
                          background.color=$TRANSPARENT \
                          padding_left=2 \
-                         padding_right=2 \
+                         padding_right=10 \
            --subscribe battery system_woke power_source_change
 
 sketchybar --add item power_logo right \
@@ -175,15 +261,11 @@ sketchybar --add item time_logo right \
 sketchybar --add bracket right_island time_logo time clock_logo date power_logo battery \
            --set right_island background.color=$BAR_COLOR \
                               background.corner_radius=12 \
-                              background.height=28 \
-                              background.padding_left=2 \
-                              background.padding_right=8 \
-                              background.y_offset=1 \
+                              background.height=30 \
+                              background.y_offset=0 \
                               background.drawing=on \
-                              blur_radius=30 \
-                              background.shadow.drawing=on \
-                              background.shadow.color=$SHADOW_COLOR \
-                              background.shadow.distance=4
+                              blur_radius=0 \
+                              background.shadow.drawing=off
 
 ############## FINALIZE ##############
 sketchybar --update

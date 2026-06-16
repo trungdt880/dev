@@ -9,7 +9,7 @@ FILLED=$(printf '\342\227\217')  # U+25CF ●  black circle
 HOLLOW=$(printf '\342\227\213')  # U+25CB ○  white circle
 
 # Uniform font/offset for every state; only glyph + color change.
-FONT="Hack Nerd Font:Regular:16.0"
+FONT="Hack Nerd Font:Regular:20.0"
 
 sid=${NAME#space.}
 napps=$(aerospace list-windows --workspace "$sid" --count)
