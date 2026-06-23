@@ -13,3 +13,4 @@ case "$OS" in
         ;;
     *) echo "Unsupported OS: $OS" >&2; exit 1 ;;
 esac
+git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm

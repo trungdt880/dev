@@ -24,319 +24,244 @@ fi
 
 # --- Linux: download static binaries from GitHub releases (no sudo) ----------
 
-mkdir -p ~/.local/bin
 LOCAL_BIN="$HOME/.local/bin"
 TMP_DIR="/tmp/cli-install"
 
-# Check command
+mkdir -p "$LOCAL_BIN"
+rm -rf "$TMP_DIR"
+mkdir -p "$TMP_DIR"
+
 has_command() {
     command -v "$1" &>/dev/null
 }
 
-# Check for root privileges
-has_root() {
-    sudo -n true 2>/dev/null
-}
-
-# fd-find
-install_fd() {
-    if has_command fd; then
-        echo "✔ fd is already installed"
-        return
-    fi
-
-    echo "Installing fd..."
-    echo "Installing fd without root..."
-    cd "$TMP_DIR"
-    LATEST=$(curl -s https://api.github.com/repos/sharkdp/fd/releases/latest | grep tag_name | cut -d '"' -f 4)
-    ARCH=$(uname -m)
-    case "$ARCH" in
-    x86_64) ARCH_TYPE="x86_64-unknown-linux-gnu" ;;
-    aarch64 | arm64) ARCH_TYPE="aarch64-unknown-linux-gnu" ;;
+# Pick the right value for the running CPU. Usage:
+#   arch_select <x86_64-value> <aarch64-value>
+# Returns non-zero (and warns) on an arch we don't ship binaries for, so the
+# caller can skip that single tool instead of aborting the whole run.
+arch_select() {
+    case "$(uname -m)" in
+    x86_64 | amd64) printf '%s\n' "$1" ;;
+    aarch64 | arm64) printf '%s\n' "$2" ;;
     *)
-        echo "Unsupported_arch: $ARCH"
+        echo "  ✗ unsupported arch: $(uname -m)" >&2
         return 1
         ;;
     esac
-    URL="https://github.com/sharkdp/fd/releases/download/${LATEST}/fd-${LATEST}-${ARCH_TYPE}.tar.gz"
-    curl -LO "$URL"
-    tar -xf "fd-${LATEST}-${ARCH_TYPE}.tar.gz"
-    cp "fd-${LATEST}-${ARCH_TYPE}/fd" "$LOCAL_BIN"
-    chmod +x "$LOCAL_BIN/fd"
-    echo "✔ fd installed to $LOCAL_BIN"
 }
 
-# bat
-install_bat() {
-    if has_command bat; then
-        echo "✔ bat is already installed"
-        return
-    fi
-
-    echo "Installing bat..."
-    echo "Installing bat without root..."
-    cd "$TMP_DIR"
-    LATEST=$(curl -s https://api.github.com/repos/sharkdp/bat/releases/latest | grep tag_name | cut -d '"' -f 4)
-    ARCH=$(uname -m)
-    case "$ARCH" in
-    x86_64) ARCH_TYPE="x86_64-unknown-linux-gnu" ;;
-    aarch64 | arm64) ARCH_TYPE="aarch64-unknown-linux-gnu" ;;
-    *)
-        echo "Unsupported arch: $ARCH"
+# Resolve the published tag of a repo's latest release (e.g. "v0.19.2").
+# Prefers jq when present, falls back to grep so it still works on a bare box.
+gh_latest_tag() {
+    local repo="$1" json tag
+    json=$(curl -fsSL "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null) || {
+        echo "  ✗ could not reach GitHub API for ${repo} (rate-limited?)" >&2
         return 1
-        ;;
-    esac
-    URL="https://github.com/sharkdp/bat/releases/download/${LATEST}/bat-${LATEST}-${ARCH_TYPE}.tar.gz"
-    curl -LO "$URL"
-    tar -xf "bat-${LATEST}-${ARCH_TYPE}.tar.gz"
-    cp "bat-${LATEST}-${ARCH_TYPE}/bat" "$LOCAL_BIN"
-    chmod +x "$LOCAL_BIN/bat"
-    echo "✔ bat installed to $LOCAL_BIN"
-}
-
-# ripgrep (rg)
-install_rg() {
-    if has_command rg; then
-        echo "✔ ripgrep is already installed"
-        return
-    fi
-
-    echo "Installing ripgrep..."
-    echo "Installing ripgrep without root..."
-    cd "$TMP_DIR"
-    LATEST=$(curl -s https://api.github.com/repos/BurntSushi/ripgrep/releases/latest | grep tag_name | cut -d '"' -f 4)
-    ARCH=$(uname -m)
-    case "$ARCH" in
-    x86_64) ARCH_TYPE="x86_64-unknown-linux-musl" ;;
-    aarch64 | arm64) ARCH_TYPE="aarch64-unknown-linux-musl" ;;
-    *)
-        echo "Unsupported arch: $ARCH"
-        return 1
-        ;;
-    esac
-    URL="https://github.com/BurntSushi/ripgrep/releases/download/${LATEST}/ripgrep-${LATEST}-${ARCH_TYPE}.tar.gz"
-    curl -LO "$URL"
-    tar -xf "ripgrep-${LATEST}-${ARCH_TYPE}.tar.gz"
-    cp "ripgrep-${LATEST}-${ARCH_TYPE}/rg" "$LOCAL_BIN"
-    chmod +x "$LOCAL_BIN/rg"
-    echo "✔ ripgrep installed to $LOCAL_BIN"
-}
-
-# Neovim (nvim)
-install_nvim() {
-    #if has_command nvim; then
-    #    echo "✔ nvim is already installed"
-    #    return
-    #fi
-
-    echo "Installing nvim..."
-
-    # Create permanent installation directory
-    NVIM_INSTALL_DIR="$HOME/.local/share/nvim"
-    mkdir -p "$NVIM_INSTALL_DIR"
-
-    cd "$TMP_DIR"
-
-    # Get latest release info
-    echo "Fetching latest nvim release..."
-    LATEST=$(curl -s https://api.github.com/repos/neovim/neovim/releases/latest | grep tag_name | cut -d '"' -f 4)
-
-    if [ -z "$LATEST" ]; then
-        echo "✗ Failed to fetch latest nvim version"
-        return 1
-    fi
-
-    URL="https://github.com/neovim/neovim/releases/download/${LATEST}/nvim-linux-x86_64.tar.gz"
-    TARBALL="nvim-linux-x86_64.tar.gz"
-
-    echo "Downloading nvim ${LATEST}..."
-    curl -LO "$URL"
-
-    if [ ! -f "$TARBALL" ]; then
-        echo "✗ Failed to download nvim"
-        return 1
-    fi
-
-    # Extract to permanent location
-    echo "Extracting nvim..."
-    tar -xzf "$TARBALL"
-
-    # Remove old installation if exists
-    if [ -d "$NVIM_INSTALL_DIR/nvim-linux-x86_64" ]; then
-        rm -rf "$NVIM_INSTALL_DIR/nvim-linux-x86_64"
-    fi
-
-    # Move to permanent location
-    mv nvim-linux-x86_64 "$NVIM_INSTALL_DIR/"
-
-    # Create symlink in local bin
-    mkdir -p "$LOCAL_BIN"
-    ln -sf "$NVIM_INSTALL_DIR/nvim-linux-x86_64/bin/nvim" "$LOCAL_BIN/nvim"
-
-    # Clean up
-    rm -f "$TARBALL"
-
-    # Verify installation
-    if [ -x "$LOCAL_BIN/nvim" ]; then
-        echo "✔ nvim installed successfully"
-        echo "  Location: $NVIM_INSTALL_DIR/nvim-linux-x86_64"
-        echo "  Symlink: $LOCAL_BIN/nvim"
+    }
+    if has_command jq; then
+        tag=$(printf '%s' "$json" | jq -r '.tag_name // empty')
     else
-        echo "✗ nvim installation failed"
+        tag=$(printf '%s' "$json" | grep '"tag_name"' | head -1 | cut -d '"' -f 4)
+    fi
+    [[ -n "$tag" ]] || {
+        echo "  ✗ could not parse latest tag for ${repo}" >&2
+        return 1
+    }
+    printf '%s\n' "$tag"
+}
+
+# Download a URL to a file, failing loudly on HTTP errors (so we never feed a
+# 404 HTML page into tar) and retrying transient network hiccups.
+fetch() {
+    curl -fSL --retry 3 --retry-delay 2 -o "$2" "$1"
+}
+
+# The common shape: download a tar/zip, find a single named binary anywhere
+# inside (top-level OR versioned subdir), and install it. Robust to layout
+# differences between projects.
+#   install_archive <bin-name> <url>
+install_archive() {
+    local bin="$1" url="$2"
+    local work archive found
+    work="$(mktemp -d "${TMP_DIR}/${bin}.XXXXXX")"
+    archive="${work}/${url##*/}"
+
+    echo "  ↓ ${url}"
+    fetch "$url" "$archive" || {
+        echo "  ✗ download failed for ${bin}" >&2
+        rm -rf "$work"
+        return 1
+    }
+
+    case "$archive" in
+    *.zip) unzip -q -o "$archive" -d "$work" ;;
+    *.tar.gz | *.tgz) tar -xzf "$archive" -C "$work" ;;
+    *.tar.* | *.tar) tar -xf "$archive" -C "$work" ;;
+    *)
+        echo "  ✗ unknown archive type: ${archive}" >&2
+        rm -rf "$work"
+        return 1
+        ;;
+    esac || {
+        echo "  ✗ extract failed for ${bin}" >&2
+        rm -rf "$work"
+        return 1
+    }
+
+    found="$(find "$work" -type f -name "$bin" 2>/dev/null | head -1)"
+    if [[ -z "$found" ]]; then
+        echo "  ✗ '${bin}' binary not found in archive" >&2
+        rm -rf "$work"
         return 1
     fi
+
+    install -m 0755 "$found" "${LOCAL_BIN}/${bin}"
+    rm -rf "$work"
+    echo "  ✔ ${bin} installed to ${LOCAL_BIN}"
+}
+
+install_fd() {
+    has_command fd && { echo "  ✔ fd already installed"; return; }
+    local tag triple
+    tag=$(gh_latest_tag sharkdp/fd) || return 1
+    triple=$(arch_select x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu) || return 1
+    install_archive fd "https://github.com/sharkdp/fd/releases/download/${tag}/fd-${tag}-${triple}.tar.gz"
+}
+
+install_bat() {
+    has_command bat && { echo "  ✔ bat already installed"; return; }
+    local tag triple
+    tag=$(gh_latest_tag sharkdp/bat) || return 1
+    triple=$(arch_select x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu) || return 1
+    install_archive bat "https://github.com/sharkdp/bat/releases/download/${tag}/bat-${tag}-${triple}.tar.gz"
+}
+
+install_rg() {
+    has_command rg && { echo "  ✔ ripgrep already installed"; return; }
+    local tag triple
+    tag=$(gh_latest_tag BurntSushi/ripgrep) || return 1
+    # NB: ripgrep ships x86_64 as musl but aarch64 only as gnu — there is no
+    # aarch64 musl asset. Getting this wrong is what broke aarch64 boxes.
+    triple=$(arch_select x86_64-unknown-linux-musl aarch64-unknown-linux-gnu) || return 1
+    install_archive rg "https://github.com/BurntSushi/ripgrep/releases/download/${tag}/ripgrep-${tag}-${triple}.tar.gz"
 }
 
 install_eza() {
-    if has_command eza; then
-        echo "✔ eza is already installed"
-        return
-    fi
-
-    echo "Installing eza..."
-    if ! has_command eza; then
-        echo "Installing eza without root..."
-        cd "$TMP_DIR"
-        LATEST=$(curl -s https://api.github.com/repos/eza-community/eza/releases/latest | grep tag_name | cut -d '"' -f 4)
-        ARCH=$(uname -m)
-        case "$ARCH" in
-        x86_64) ARCH_TYPE="x86_64-unknown-linux-gnu" ;;
-        aarch64 | arm64) ARCH_TYPE="aarch64-unknown-linux-gnu" ;;
-        *) echo "Unsupported arch: $ARCH" && return 1 ;;
-        esac
-
-        URL="https://github.com/eza-community/eza/releases/download/${LATEST}/eza_${ARCH_TYPE}.tar.gz"
-
-        curl -LO "$URL"
-        tar -xzf "eza_${ARCH_TYPE}.tar.gz"
-
-        if [ -f "eza" ]; then
-            cp eza "$LOCAL_BIN"
-        else
-            chmod +x eza*/eza
-            cp eza*/eza "$LOCAL_BIN"
-        fi
-
-        chmod +x "$LOCAL_BIN/eza"
-        echo "✔ eza installed to $LOCAL_BIN"
-    fi
+    has_command eza && { echo "  ✔ eza already installed"; return; }
+    local tag triple
+    tag=$(gh_latest_tag eza-community/eza) || return 1
+    triple=$(arch_select x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu) || return 1
+    install_archive eza "https://github.com/eza-community/eza/releases/download/${tag}/eza_${triple}.tar.gz"
 }
 
 install_yazi() {
-    if has_command yazi; then
-        echo "✔ yazi is already installed"
-        return
-    fi
-
-    echo "Installing yazi..."
-    cd "$TMP_DIR"
-    LATEST=$(curl -s https://api.github.com/repos/sxyazi/yazi/releases/latest | grep tag_name | cut -d '"' -f 4)
-    ARCH=$(uname -m)
-    case "$ARCH" in
-    x86_64) ARCH_TYPE="x86_64-unknown-linux-gnu" ;;
-    aarch64 | arm64) ARCH_TYPE="aarch64-unknown-linux-gnu" ;;
-    *) echo "Unsupported arch: $ARCH" && return 1 ;;
-    esac
-
-    URL="https://github.com/sxyazi/yazi/releases/download/${LATEST}/yazi-${ARCH_TYPE}.zip"
-    curl -LO "$URL"
-    unzip -q "yazi-${ARCH_TYPE}.zip"
-    cp "yazi-${ARCH_TYPE}/yazi" "$LOCAL_BIN"
-    chmod +x "$LOCAL_BIN/yazi"
-    echo "✔ yazi installed to $LOCAL_BIN"
+    has_command yazi && { echo "  ✔ yazi already installed"; return; }
+    local tag triple
+    tag=$(gh_latest_tag sxyazi/yazi) || return 1
+    triple=$(arch_select x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu) || return 1
+    install_archive yazi "https://github.com/sxyazi/yazi/releases/download/${tag}/yazi-${triple}.zip"
 }
 
 install_delta() {
-    if has_command delta; then
-        echo "✔ delta is already installed"
-        return
-    fi
-
-    echo "Installing delta..."
-    cd "$TMP_DIR"
-    LATEST=$(curl -s https://api.github.com/repos/dandavison/delta/releases/latest | grep tag_name | cut -d '"' -f 4)
-    ARCH=$(uname -m)
-    case "$ARCH" in
-    x86_64) ARCH_TYPE="x86_64-unknown-linux-gnu" ;;
-    aarch64 | arm64) ARCH_TYPE="aarch64-unknown-linux-gnu" ;;
-    *) echo "Unsupported arch: $ARCH" && return 1 ;;
-    esac
-
-    URL="https://github.com/dandavison/delta/releases/download/${LATEST}/delta-${LATEST}-${ARCH_TYPE}.tar.gz"
-    curl -LO "$URL"
-    tar -xf "delta-${LATEST}-${ARCH_TYPE}.tar.gz"
-    cp "delta-${LATEST}-${ARCH_TYPE}/delta" "$LOCAL_BIN"
-    chmod +x "$LOCAL_BIN/delta"
-    echo "✔ delta installed to $LOCAL_BIN"
+    has_command delta && { echo "  ✔ delta already installed"; return; }
+    local tag triple
+    tag=$(gh_latest_tag dandavison/delta) || return 1
+    triple=$(arch_select x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu) || return 1
+    install_archive delta "https://github.com/dandavison/delta/releases/download/${tag}/delta-${tag}-${triple}.tar.gz"
 }
 
 install_zoxide() {
-    if has_command zoxide; then
-        echo "✔ zoxide is already installed"
-        return
-    fi
-
-    echo "Installing zoxide..."
-    cd "$TMP_DIR"
-    LATEST=$(curl -s https://api.github.com/repos/ajeetdsouza/zoxide/releases/latest | grep tag_name | cut -d '"' -f 4)
-    LATEST_NO_V=$(curl -s https://api.github.com/repos/ajeetdsouza/zoxide/releases/latest | grep tag_name | cut -d '"' -f 4 | sed 's/^v//')
-    ARCH=$(uname -m)
-    case "$ARCH" in
-    x86_64) ARCH_TYPE="x86_64-unknown-linux-musl" ;;
-    aarch64 | arm64) ARCH_TYPE="aarch64-unknown-linux-musl" ;;
-    *) echo "Unsupported arch: $ARCH" && return 1 ;;
-    esac
-
-    URL="https://github.com/ajeetdsouza/zoxide/releases/download/${LATEST}/zoxide-${LATEST_NO_V}-${ARCH_TYPE}.tar.gz"
-    wget "$URL"
-    tar -xf "zoxide-${LATEST_NO_V}-${ARCH_TYPE}.tar.gz"
-    cp "zoxide" "$LOCAL_BIN"
-    chmod +x "$LOCAL_BIN/zoxide"
-    echo "✔ zoxide installed to $LOCAL_BIN"
+    has_command zoxide && { echo "  ✔ zoxide already installed"; return; }
+    local tag triple ver
+    tag=$(gh_latest_tag ajeetdsouza/zoxide) || return 1
+    ver="${tag#v}"
+    triple=$(arch_select x86_64-unknown-linux-musl aarch64-unknown-linux-musl) || return 1
+    install_archive zoxide "https://github.com/ajeetdsouza/zoxide/releases/download/${tag}/zoxide-${ver}-${triple}.tar.gz"
 }
 
 install_lazygit() {
-    if has_command lazygit; then
-        echo "✔ lazygit is already installed"
-        return
+    has_command lazygit && { echo "  ✔ lazygit already installed"; return; }
+    local tag triple ver
+    tag=$(gh_latest_tag jesseduffield/lazygit) || return 1
+    ver="${tag#v}"
+    triple=$(arch_select Linux_x86_64 Linux_arm64) || return 1
+    install_archive lazygit "https://github.com/jesseduffield/lazygit/releases/download/${tag}/lazygit_${ver}_${triple}.tar.gz"
+}
+
+# nvim ships a whole runtime tree (not a single binary), so it gets its own
+# install path: extract into ~/.local/share/nvim and symlink the launcher.
+# Always reinstalls to track latest.
+install_nvim() {
+    local tag variant url work archive srcdir dest
+    tag=$(gh_latest_tag neovim/neovim) || return 1
+    variant=$(arch_select linux-x86_64 linux-arm64) || return 1
+    url="https://github.com/neovim/neovim/releases/download/${tag}/nvim-${variant}.tar.gz"
+
+    work="$(mktemp -d "${TMP_DIR}/nvim.XXXXXX")"
+    archive="${work}/nvim.tar.gz"
+
+    echo "  ↓ ${url}"
+    fetch "$url" "$archive" || {
+        echo "  ✗ nvim download failed" >&2
+        rm -rf "$work"
+        return 1
+    }
+    tar -xzf "$archive" -C "$work" || {
+        echo "  ✗ nvim extract failed" >&2
+        rm -rf "$work"
+        return 1
+    }
+
+    srcdir="${work}/nvim-${variant}"
+    [[ -d "$srcdir" ]] || srcdir="$(find "$work" -maxdepth 1 -type d -name 'nvim-*' | head -1)"
+    if [[ -z "$srcdir" || ! -x "${srcdir}/bin/nvim" ]]; then
+        echo "  ✗ nvim payload not found in archive" >&2
+        rm -rf "$work"
+        return 1
     fi
 
-    echo "Installing lazygit..."
-    cd "$TMP_DIR"
-    LATEST=$(curl -s https://api.github.com/repos/jesseduffield/lazygit/releases/latest | grep tag_name | cut -d '"' -f 4)
-    LATEST_NO_V=$(curl -s https://api.github.com/repos/jesseduffield/lazygit/releases/latest | grep tag_name | cut -d '"' -f 4 | sed 's/^v//')
-    ARCH=$(uname -m)
-    case "$ARCH" in
-    x86_64) ARCH_TYPE="Linux_x86_64" ;;
-    aarch64 | arm64) ARCH_TYPE="Linux_arm64" ;;
-    *) echo "Unsupported arch: $ARCH" && return 1 ;;
-    esac
+    dest="${HOME}/.local/share/nvim/nvim-${variant}"
+    mkdir -p "$(dirname "$dest")"
+    rm -rf "$dest"
+    mv "$srcdir" "$dest"
+    ln -sf "${dest}/bin/nvim" "${LOCAL_BIN}/nvim"
+    rm -rf "$work"
 
-    URL="https://github.com/jesseduffield/lazygit/releases/download/${LATEST}/lazygit_${LATEST_NO_V}_${ARCH_TYPE}.tar.gz"
-    curl -LO "$URL"
-    tar xf "lazygit_${LATEST_NO_V}_${ARCH_TYPE}.tar.gz"
-    cp lazygit "$LOCAL_BIN"
-    chmod +x "$LOCAL_BIN/lazygit"
-    echo "✔ lazygit installed to $LOCAL_BIN"
+    if "${LOCAL_BIN}/nvim" --version >/dev/null 2>&1; then
+        echo "  ✔ nvim ${tag} installed (${dest})"
+    else
+        echo "  ✗ nvim installed but won't run" >&2
+        return 1
+    fi
 }
 
 ##################################################
 # Main
 ##################################################
 
-mkdir -p "$TMP_DIR"
-mkdir -p "$LOCAL_BIN"
+FAILED=()
 
-install_fd
-install_bat
-install_rg
-install_eza
-install_yazi
-install_delta
-install_nvim
-install_zoxide
-install_lazygit
+run_install() {
+    local name="$1"
+    echo "── ${name} ──"
+    # Run inside an `if` so a failing tool returns cleanly instead of aborting
+    # the whole script under `set -e`.
+    if "install_${name}"; then
+        :
+    else
+        FAILED+=("$name")
+    fi
+}
 
-echo ""
-echo "✅ All tools installed."
-echo "➡ Make sure $HOME/.local/bin is in your PATH!"
+for tool in fd bat rg eza yazi delta nvim zoxide lazygit; do
+    run_install "$tool"
+done
+
+echo
+if [[ ${#FAILED[@]} -gt 0 ]]; then
+    echo "⚠ Some tools failed: ${FAILED[*]}"
+    echo "  (re-run ./run tools to retry — already-installed tools are skipped)"
+else
+    echo "✅ All tools installed."
+fi
+echo "➡ Make sure ${HOME}/.local/bin is in your PATH!"
