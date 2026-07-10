@@ -4,26 +4,6 @@ set -euo pipefail
 
 OS="$(uname -s)"
 
-# On macOS, Homebrew is the cleanest path — and we don't have the sudo
-# constraint we have on remote linux boxes. Install all tools via brew
-# and exit.
-if [[ "$OS" == "Darwin" ]]; then
-    command -v brew >/dev/null 2>&1 || {
-        echo "brew required on macOS; run ./run _brew first" >&2
-        exit 1
-    }
-    brew install fd bat ripgrep eza yazi git-delta zoxide lazygit neovim
-    echo "✔ tools installed via brew"
-    exit 0
-fi
-
-if [[ "$OS" != "Linux" ]]; then
-    echo "Unsupported OS: $OS" >&2
-    exit 1
-fi
-
-# --- Linux: download static binaries from GitHub releases (no sudo) ----------
-
 LOCAL_BIN="$HOME/.local/bin"
 TMP_DIR="/tmp/cli-install"
 
@@ -120,6 +100,46 @@ install_archive() {
     echo "  ✔ ${bin} installed to ${LOCAL_BIN}"
 }
 
+# tuicr isn't in homebrew core (only a personal tap), so it's installed from
+# GitHub release binaries on BOTH platforms — the one cross-OS installer here.
+install_tuicr() {
+    has_command tuicr && { echo "  ✔ tuicr already installed"; return; }
+    local tag ver triple
+    tag=$(gh_latest_tag agavra/tuicr) || return 1
+    ver="${tag#v}"
+    if [[ "$OS" == "Darwin" ]]; then
+        triple=$(arch_select x86_64-apple-darwin aarch64-apple-darwin) || return 1
+    else
+        triple=$(arch_select x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu) || return 1
+    fi
+    install_archive tuicr "https://github.com/agavra/tuicr/releases/download/${tag}/tuicr-${ver}-${triple}.tar.gz"
+}
+
+# On macOS, Homebrew is the cleanest path — and we don't have the sudo
+# constraint we have on remote linux boxes. Install all brew-available tools
+# via brew, then tuicr from its release binary, and exit.
+if [[ "$OS" == "Darwin" ]]; then
+    command -v brew >/dev/null 2>&1 || {
+        echo "brew required on macOS; run ./run _brew first" >&2
+        exit 1
+    }
+    brew install fd bat ripgrep eza yazi git-delta zoxide lazygit neovim duf bottom
+    echo "── tuicr ──"
+    if install_tuicr; then
+        echo "✔ tools installed via brew (+ tuicr binary in ${LOCAL_BIN})"
+    else
+        echo "⚠ brew tools installed, but tuicr failed (re-run ./run tools to retry)"
+    fi
+    exit 0
+fi
+
+if [[ "$OS" != "Linux" ]]; then
+    echo "Unsupported OS: $OS" >&2
+    exit 1
+fi
+
+# --- Linux: download static binaries from GitHub releases (no sudo) ----------
+
 install_fd() {
     has_command fd && { echo "  ✔ fd already installed"; return; }
     local tag triple
@@ -188,6 +208,24 @@ install_lazygit() {
     install_archive lazygit "https://github.com/jesseduffield/lazygit/releases/download/${tag}/lazygit_${ver}_${triple}.tar.gz"
 }
 
+install_duf() {
+    has_command duf && { echo "  ✔ duf already installed"; return; }
+    local tag ver arch
+    tag=$(gh_latest_tag muesli/duf) || return 1
+    ver="${tag#v}"
+    arch=$(arch_select x86_64 arm64) || return 1
+    install_archive duf "https://github.com/muesli/duf/releases/download/${tag}/duf_${ver}_linux_${arch}.tar.gz"
+}
+
+# bottom's binary is named `btm`; release assets carry no version in the name.
+install_bottom() {
+    has_command btm && { echo "  ✔ bottom already installed"; return; }
+    local tag triple
+    tag=$(gh_latest_tag ClementTsang/bottom) || return 1
+    triple=$(arch_select x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu) || return 1
+    install_archive btm "https://github.com/ClementTsang/bottom/releases/download/${tag}/bottom_${triple}.tar.gz"
+}
+
 # nvim ships a whole runtime tree (not a single binary), so it gets its own
 # install path: extract into ~/.local/share/nvim and symlink the launcher.
 # Always reinstalls to track latest.
@@ -253,7 +291,7 @@ run_install() {
     fi
 }
 
-for tool in fd bat rg eza yazi delta nvim zoxide lazygit; do
+for tool in fd bat rg eza yazi delta nvim zoxide lazygit tuicr duf bottom; do
     run_install "$tool"
 done
 
