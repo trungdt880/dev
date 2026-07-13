@@ -1,0 +1,1 @@
+cargo install tree-sitter-cli --locked

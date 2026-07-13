@@ -22,7 +22,7 @@ url="http://127.0.0.1:${port}/"
 
 # Safely construct the remote command.
 printf -v remote_command \
-    'exec "$HOME/.local/bin/copyparty-artifacts" %q %q' \
+    'exec "$HOME/.local/scripts/copyparty-artifacts" %q %q' \
     "$remote_dir" "$port"
 
 echo "Serving: ${host}:${remote_dir}"
