@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    echo "Usage: $(basename "$0") HOST REMOTE_DIRECTORY [PORT]"
+    echo "Example: $(basename "$0") gpu-box /home/me/runs/experiment-42"
+    exit 1
+}
+
+[[ $# -ge 2 && $# -le 3 ]] || usage
+
+host=$1
+remote_dir=$2
+port=${3:-8765}
+
+[[ "$port" =~ ^[0-9]+$ ]] && (( port >= 1 && port <= 65535 )) || {
+    echo "Error: invalid port: $port" >&2
+    exit 1
+}
+
+url="http://127.0.0.1:${port}/"
+
+# Safely construct the remote command.
+printf -v remote_command \
+    'exec "$HOME/.local/bin/copyparty-artifacts" %q %q' \
+    "$remote_dir" "$port"
+
+echo "Serving: ${host}:${remote_dir}"
+echo "Opening: ${url}"
+echo "Press Ctrl-C to stop."
+
+exec ssh \
+    -o ExitOnForwardFailure=yes \
+    -L "127.0.0.1:${port}:127.0.0.1:${port}" \
+    "$host" \
+    "$remote_command"

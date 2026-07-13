@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+dir="${1:-$PWD}"
+port="${2:-8765}"
+
+exec python3 "$HOME/.local/bin/copyparty-sfx.py" \
+  -i 127.0.0.1 \
+  -p "$port" \
+  -v "$dir::r" \
+  --grid
