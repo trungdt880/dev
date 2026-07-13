@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# remote-view HOST REMOTE_DIR [PORT]
+
+host=$1
+dir=$2
+port=${3:-8765}
+
+ssh \
+  -o ExitOnForwardFailure=yes \
+  -L "127.0.0.1:${port}:127.0.0.1:${port}" \
+  "$host" \
+  "python3 -m http.server '$port' --bind 127.0.0.1 --directory '$dir'"
