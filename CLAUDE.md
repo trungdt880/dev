@@ -77,8 +77,36 @@ provenance of any installed file is greppable:
   compose. Used for top-level dotfiles, `.local/scripts/*`, and deeply
   nested singletons like `.oh-my-zsh/custom/<theme>`.
 
-`.gitkeep` files are filtered from the mirror so empty host layers (etri,
-q) don't leak files into `$HOME`.
+`.gitkeep` files are filtered from the mirror so empty host layers (q)
+don't leak files into `$HOME`.
+
+### etri is special — use `dev-env-etri`, not `dev-env`
+
+`etri` is a **shared multi-user box**. Its dotfiles must NOT land in `$HOME`
+(not ours to fill) and must be **symlinks**, not copies. So etri is
+provisioned by a separate script:
+
+```bash
+DEV_ENV=... ./dev-env-etri --dry   # preview
+DEV_ENV=... ./dev-env-etri         # apply
+```
+
+Differences from `dev-env`:
+
+- Target is `$DOTHOME` (defaults to `$ZDOTDIR`, i.e. `~/.trungdt-config`),
+  not `$HOME`. The login shell sets `ZDOTDIR=$DOTHOME` so zsh reads
+  `$DOTHOME/.zshrc` etc.
+- Symlinks (`ln -sfn`) not copies — edits in the repo are live.
+- `env/host/etri/.zshenv` sets `XDG_CONFIG_HOME=$ZDOTDIR/.config`,
+  `DEV_ENV`, and `ZSH_CUSTOM=$ZDOTDIR/.oh-my-zsh/custom` **before** the rc
+  files run. Base `.zshrc`/`.zsh_profile` therefore use
+  `${ZDOTDIR:-$HOME}` and `${VAR:-default}` so they resolve on both etri
+  and normal hosts.
+- `~/.oh-my-zsh` is shared; the custom theme is isolated under
+  `$ZSH_CUSTOM/themes/` and shared plugins are symlinked back in.
+
+`WS=etri` still exists in `WS_LAYERS` for completeness, but running plain
+`dev-env` on etri would copy into `$HOME` — don't; use `dev-env-etri`.
 
 ### Safety rails
 

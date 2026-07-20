@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+#
+# Provision dotfiles on etri — a SHARED, multi-user box.
+#
+# Why a separate script (not the WS=etri branch of `dev-env`):
+#   - Dotfiles must live under $DOTHOME (~/.trungdt-config), NOT $HOME.
+#     $HOME on this box is shared / not ours to fill with configs.
+#   - We want SYMLINKS, not copies, so edits in the repo are live and the
+#     provenance of every installed file stays obvious.
+#   - Loading is driven by $ZDOTDIR=$DOTHOME (set outside this repo, e.g.
+#     in /etc or the login shell), so zsh reads $DOTHOME/.zshrc etc.
+#
+# `dev-env` (the copy-into-$HOME provisioner) stays clean and untouched.
+#
+# Idempotent: safe to re-run. Uses `ln -sfn` so existing links are
+# repointed, never nested. Pass --dry to preview.
+
+set -euo pipefail
+
+YELLOW='\033[33m'
+RED='\033[31m'
+NC='\033[0m'
+
+dry_run="0"
+if [[ "${1:-}" == "-d" || "${1:-}" == "--dry" || "${1:-}" == "--dry-run" ]]; then
+    dry_run="1"
+fi
+
+if [ -z "${DEV_ENV:-}" ]; then
+    echo "env var DEV_ENV needs to be present" >&2
+    exit 1
+fi
+
+# Where dotfiles land. $ZDOTDIR is what the login shell points at; fall
+# back to the known etri path so this works even before a shell sets it.
+DOTHOME="${DOTHOME:-${ZDOTDIR:-$HOME/.trungdt-config}}"
+
+BASE="$DEV_ENV/env/base"
+ETRI="$DEV_ENV/env/host/etri"
+
+log() {
+    if [[ "$dry_run" == "1" ]]; then echo -e "[DRY] $1"; else echo -e "$1"; fi
+}
+
+# Refuse to touch empty / root / $HOME itself.
+safe_target() {
+    local t="$1"
+    if [[ -z "$t" || "$t" == "/" || "$t" == "$HOME" ]]; then
+        echo "refusing to operate on '$t'" >&2
+        exit 1
+    fi
+}
+
+# link SRC -> DST, creating parent dirs. Idempotent and re-run friendly:
+#   - dst already the correct symlink -> no-op
+#   - dst a stale symlink            -> repointed
+#   - dst a REAL file/dir            -> backed up to dst.bak-<n>, then linked
+#     (plain `ln -sfn` would nest the link *inside* an existing real dir).
+link() {
+    local src="$1" dst="$2"
+    if [[ ! -e "$src" ]]; then
+        log "  ${RED}[missing]${NC} $src — skipped"
+        return 0
+    fi
+    safe_target "$dst"
+
+    # Already pointing where we want? nothing to do.
+    if [[ -L "$dst" && "$(readlink "$dst")" == "$src" ]]; then
+        log "  ${YELLOW}[ok]${NC}   $dst -> $src (already linked)"
+        return 0
+    fi
+
+    # A real (non-symlink) file/dir is in the way — preserve it.
+    if [[ -e "$dst" && ! -L "$dst" ]]; then
+        local bak="$dst.bak"
+        local n=1
+        while [[ -e "$bak" ]]; do bak="$dst.bak-$n"; n=$((n + 1)); done
+        log "  ${RED}[backup]${NC} real path $dst -> $bak"
+        if [[ "$dry_run" == "0" ]]; then
+            mv -- "$dst" "$bak"
+        fi
+    fi
+
+    log "  ${YELLOW}[link]${NC} $dst -> $src"
+    if [[ "$dry_run" == "0" ]]; then
+        mkdir -p "$(dirname "$dst")"
+        ln -sfn "$src" "$dst"
+    fi
+}
+
+echo "etri provision -> DOTHOME=$DOTHOME"
+[[ -d "$ETRI" ]] || { echo "no etri layer at $ETRI" >&2; exit 1; }
+
+# 1. Top-level dotfiles from base (rc + aliases + tmux).
+log "${YELLOW}=== base dotfiles ===${NC}"
+link "$BASE/.zshrc"       "$DOTHOME/.zshrc"
+link "$BASE/.zsh_aliases" "$DOTHOME/.zsh_aliases"
+link "$BASE/.zsh_profile" "$DOTHOME/.zsh_profile"
+link "$BASE/.tmux.conf"   "$DOTHOME/.tmux.conf"
+
+# 2. .config tool dirs (symlink the whole dir per tool).
+log "${YELLOW}=== base .config ===${NC}"
+if [[ -d "$BASE/.config" ]]; then
+    while IFS= read -r -d '' src; do
+        link "$src" "$DOTHOME/.config/$(basename "$src")"
+    done < <(find "$BASE/.config" -mindepth 1 -maxdepth 1 -print0)
+fi
+
+# 3. etri host layer wins for .zshrc.local (WS=etri, claude alias, pcat).
+log "${YELLOW}=== etri host layer ===${NC}"
+link "$ETRI/.zshrc.local" "$DOTHOME/.zshrc.local"
+
+# 4. Custom oh-my-zsh theme. ZSH_CUSTOM ($DOTHOME/.oh-my-zsh/custom) is
+#    isolated from the shared ~/.oh-my-zsh; ohmyzsh loads the theme from
+#    $ZSH_CUSTOM/themes/. Plugins live in the shared tree — symlink them
+#    back in so ZSH_THEME plugins still resolve.
+log "${YELLOW}=== oh-my-zsh custom ===${NC}"
+link "$BASE/.oh-my-zsh/custom/robbyrussell.zsh-theme" \
+     "$DOTHOME/.oh-my-zsh/custom/themes/robbyrussell.zsh-theme"
+link "$HOME/.oh-my-zsh/custom/plugins" \
+     "$DOTHOME/.oh-my-zsh/custom/plugins"
+
+# 5. .zshenv — sets XDG_CONFIG_HOME / DEV_ENV / ZSH_CUSTOM before rc runs.
+#    Kept in the etri layer as source of truth.
+log "${YELLOW}=== .zshenv ===${NC}"
+link "$ETRI/.zshenv" "$DOTHOME/.zshenv"
+
+echo "done. open a new shell (or 'exec zsh') to load."

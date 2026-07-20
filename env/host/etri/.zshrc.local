@@ -1,0 +1,13 @@
+export WS=etri
+
+alias claude='CLAUDE_CONFIG_DIR=/home/zeyi/trungdt/personal/.claude claude'
+
+pcat() {
+    if [[ -f "$1" ]]; then
+        (cat "$1") | xclip -selection clipboard
+        echo "Content of '$1' copied to clipboard with newline."
+    else
+        echo "File '$1' not found."
+    fi
+
+}

@@ -1,12 +1,14 @@
-export XDG_CONFIG_HOME=$HOME/.config
+export XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
 VIM="nvim"
 
-export DEV_ENV=$HOME/personal/dev
+export DEV_ENV=${DEV_ENV:-$HOME/personal/dev}
 
 PERSONAL=$XDG_CONFIG_HOME/personal
-for i in `find -L $PERSONAL`; do
-    source $i
-done
+if [ -d "$PERSONAL" ]; then
+    for i in `find -L $PERSONAL`; do
+        [ -f "$i" ] && source $i
+    done
+fi
 
 
 export GIT_EDITOR=$VIM

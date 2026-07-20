@@ -23,7 +23,7 @@ source $ZSH/oh-my-zsh.sh
 #####################
 # ALIASES           #
 #####################
-source $HOME/.zsh_aliases
+source ${ZDOTDIR:-$HOME}/.zsh_aliases
 
 #####################
 # FZF SETTINGS      #
@@ -77,7 +77,7 @@ function yy() {
 
 
 ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=13'
-source ~/.zsh_profile
+source ${ZDOTDIR:-$HOME}/.zsh_profile
 
 eval "$(zoxide init zsh)"
-[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
+[[ -f ${ZDOTDIR:-$HOME}/.zshrc.local ]] && source ${ZDOTDIR:-$HOME}/.zshrc.local
