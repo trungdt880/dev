@@ -50,6 +50,7 @@ addToPathFront() {
 addToPathFront $HOME/.local/apps
 addToPathFront $HOME/.local/scripts
 addToPathFront $HOME/.local/bin
+addToPathFront $HOME/.juliaup/bin
 addToPath $HOME/.cargo/bin
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh

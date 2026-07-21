@@ -4,6 +4,60 @@ set -euo pipefail
 dir="${1:-$PWD}"
 port="${2:-8765}"
 
+# Probe the port before starting a server. Three outcomes:
+#   0 -> a copyparty server is already there: reuse it (hold the tunnel open).
+#   1 -> nothing listening: start our own server below.
+#   2 -> some *other* service owns the port: bail out loudly, don't clobber it.
+if python3 - "$port" <<'PY'
+import socket, sys, urllib.error, urllib.request
+
+port = int(sys.argv[1])
+
+s = socket.socket()
+s.settimeout(1)
+try:
+    s.connect(("127.0.0.1", port))
+except OSError:
+    sys.exit(1)  # nothing listening
+finally:
+    s.close()
+
+# Something is listening -- confirm it's copyparty via its Server header.
+req = urllib.request.Request(f"http://127.0.0.1:{port}/", method="HEAD")
+try:
+    with urllib.request.urlopen(req, timeout=2) as r:
+        server = r.headers.get("Server", "")
+except urllib.error.HTTPError as e:
+    server = e.headers.get("Server", "")  # 4xx/5xx still identifies the server
+except Exception:
+    server = ""
+
+sys.exit(0 if "copyparty" in server.lower() else 2)
+PY
+then
+    rc=0
+else
+    rc=$?
+fi
+
+case "$rc" in
+    0)
+        echo "copyparty already running on 127.0.0.1:${port}, reusing it" >&2
+        sleep infinity 2>/dev/null || exec tail -f /dev/null
+        exit 0
+        ;;
+    1) ;;  # port free -> start our own server below
+    2)
+        echo "Error: port ${port} on the remote is in use by a non-copyparty service." >&2
+        echo "Pick a different PORT, or stop that service first." >&2
+        exit 1
+        ;;
+    *)
+        echo "Error: failed to probe port ${port} (rc=${rc})" >&2
+        exit 1
+        ;;
+esac
+
 exec python3 "$HOME/.local/scripts/copyparty-sfx.py" \
   -i 127.0.0.1 \
   -p "$port" \
