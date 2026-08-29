@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+#
+# Make Ghostty the default terminal, and make Ctrl+Alt+T open it.
+#
+# Everything here is user-level (no sudo) except the optional
+# x-terminal-emulator alternative, which is skipped unless sudo is
+# non-interactive — remote boxes often have no sudo at all.
+#
+# Three separate mechanisms decide "the terminal" on a Linux desktop:
+#   1. xdg-terminals.list  — the XDG terminal spec, read by xdg-terminal-exec,
+#                            which is what GNOME's Ctrl+Alt+T shells out to.
+#   2. GNOME gsettings     — the Ctrl+Alt+T binding itself, plus the legacy
+#                            default-applications.terminal key older
+#                            gnome-settings-daemon still honours.
+#   3. x-terminal-emulator — Debian alternatives, used by i3-sensible-terminal
+#                            and anything else calling the generic wrapper.
+#
+# Idempotent. Re-run safely.
+
+set -euo pipefail
+
+OS="$(uname -s)"
+if [[ "$OS" != "Linux" ]]; then
+    # macOS has no system-wide terminal default; Ghostty is set as default
+    # from within the app (Ghostty > Settings), nothing to script.
+    echo "[skip] default-terminal is Linux-only (OS=$OS)"
+    exit 0
+fi
+
+DESKTOP_ID="com.mitchellh.ghostty.desktop"
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+
+if ! command -v ghostty >/dev/null 2>&1; then
+    echo "[skip] ghostty not installed — run ./run ghostty first" >&2
+    exit 0
+fi
+
+# Locate the .desktop entry across the XDG data dirs.
+find_desktop_entry() {
+    local dir
+    local IFS=:
+    for dir in "${XDG_DATA_HOME:-$HOME/.local/share}" ${XDG_DATA_DIRS:-/usr/local/share:/usr/share}; do
+        [[ -f "$dir/applications/$DESKTOP_ID" ]] && { echo "$dir/applications/$DESKTOP_ID"; return 0; }
+    done
+    return 1
+}
+
+if ! entry="$(find_desktop_entry)"; then
+    echo "[warn] $DESKTOP_ID not found in any XDG data dir — Ctrl+Alt+T may not resolve" >&2
+else
+    echo "[ok]   desktop entry: $entry"
+fi
+
+# --- 1. XDG terminal spec ------------------------------------------------------
+# xdg-terminal-exec picks the first *valid* entry listed here. Without the file
+# it scans for Categories=TerminalEmulator and may pick ptyxis/gnome-terminal.
+
+list="$CONFIG_HOME/xdg-terminals.list"
+mkdir -p "$CONFIG_HOME"
+if [[ -f "$list" ]] && [[ "$(head -1 "$list")" == "$DESKTOP_ID" ]]; then
+    echo "[skip] $list already prefers ghostty"
+else
+    # Keep any other entries the user had, just demote them below ghostty.
+    rest=""
+    [[ -f "$list" ]] && rest="$(grep -vxF "$DESKTOP_ID" "$list" || true)"
+    { echo "$DESKTOP_ID"; [[ -n "$rest" ]] && echo "$rest"; } > "$list"
+    echo "[set]  $list -> $DESKTOP_ID"
+fi
+
+# --- 2. GNOME ------------------------------------------------------------------
+
+if command -v gsettings >/dev/null 2>&1 && gsettings list-schemas 2>/dev/null | grep -q '^org.gnome.settings-daemon.plugins.media-keys$'; then
+    # Ctrl+Alt+T binding.
+    want="['<Primary><Alt>t']"
+    have="$(gsettings get org.gnome.settings-daemon.plugins.media-keys terminal 2>/dev/null || echo '')"
+    if [[ "$have" == "$want" ]]; then
+        echo "[skip] Ctrl+Alt+T already bound to terminal"
+    else
+        gsettings set org.gnome.settings-daemon.plugins.media-keys terminal "$want"
+        echo "[set]  Ctrl+Alt+T -> terminal (was: $have)"
+    fi
+
+    # Legacy key, still read by older gnome-settings-daemon. Newer versions
+    # ignore it and call xdg-terminal-exec, which step 1 already pointed at us.
+    if gsettings list-schemas 2>/dev/null | grep -q '^org.gnome.desktop.default-applications.terminal$'; then
+        cur="$(gsettings get org.gnome.desktop.default-applications.terminal exec 2>/dev/null || echo '')"
+        if [[ "$cur" == "'xdg-terminal-exec'" ]]; then
+            echo "[skip] default-applications.terminal = xdg-terminal-exec (resolves via step 1)"
+        elif [[ "$cur" == "'ghostty'" ]]; then
+            echo "[skip] default-applications.terminal already ghostty"
+        else
+            gsettings set org.gnome.desktop.default-applications.terminal exec ghostty
+            gsettings set org.gnome.desktop.default-applications.terminal exec-arg -- -e
+            echo "[set]  default-applications.terminal -> ghostty (was: $cur)"
+        fi
+    fi
+else
+    echo "[skip] no GNOME media-keys schema (not a GNOME session)"
+fi
+
+# Nautilus / "Open in Terminal" and terminal: URIs.
+if command -v xdg-mime >/dev/null 2>&1; then
+    if [[ "$(xdg-mime query default x-scheme-handler/terminal 2>/dev/null)" == "$DESKTOP_ID" ]]; then
+        echo "[skip] x-scheme-handler/terminal already ghostty"
+    else
+        xdg-mime default "$DESKTOP_ID" x-scheme-handler/terminal
+        echo "[set]  x-scheme-handler/terminal -> $DESKTOP_ID"
+    fi
+fi
+
+# --- 3. Debian alternatives ----------------------------------------------------
+# Needs root. Skip silently rather than block on a password prompt.
+
+if command -v update-alternatives >/dev/null 2>&1; then
+    cur="$(update-alternatives --query x-terminal-emulator 2>/dev/null | awk '/^Value:/{print $2}')"
+    if [[ "$cur" == *ghostty* ]]; then
+        echo "[skip] x-terminal-emulator already $cur"
+    elif sudo -n true 2>/dev/null; then
+        sudo update-alternatives --set x-terminal-emulator "$(command -v ghostty)"
+        echo "[set]  x-terminal-emulator -> ghostty"
+    else
+        echo "[skip] x-terminal-emulator is $cur — needs root; run:"
+        echo "       sudo update-alternatives --set x-terminal-emulator $(command -v ghostty)"
+    fi
+fi
+
+echo "Done. Ctrl+Alt+T opens ghostty (log out/in if GNOME hasn't picked it up)."

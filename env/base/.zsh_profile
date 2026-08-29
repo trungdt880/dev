@@ -54,3 +54,10 @@ addToPathFront $HOME/.juliaup/bin
 addToPath $HOME/.cargo/bin
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
+# nvm. The installer in runs/node appends this to whichever rc it finds, which
+# means a later `./dev-env` overwrites it back out of ~/.zshrc.local. Keeping it
+# in the layer makes it survive re-provisioning.
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"

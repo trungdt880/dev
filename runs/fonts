@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 #
-# Install custom fonts referenced in env/ configs.
+# Install custom fonts referenced in env/ configs, plus a set of popular
+# programming Nerd Fonts.
 #
-# - Nerd Fonts (ryanoasis/nerd-fonts): Hack, Iosevka, FantasqueSansMono,
-#   Hermit (ships as Hurmit*), IBMPlexMono (ships as BlexMono*).
+# - Nerd Fonts (ryanoasis/nerd-fonts): the zip name is the *release asset*
+#   name, which is not always the installed family name (see `probe` below).
 # - Standalone: Monaspace (githubnext/monaspace),
 #   CommitMono (eigilnikolajsen/commit-mono).
 #
@@ -13,12 +14,30 @@
 
 set -euo pipefail
 
-NERD_FONTS=(
+# Referenced by configs in env/.
+NERD_FONTS_CONFIG=(
     Hack
     Iosevka
     FantasqueSansMono
     Hermit
     IBMPlexMono
+    CascadiaCode
+)
+
+# Popular programming fonts, not (yet) referenced by any config.
+NERD_FONTS_POPULAR=(
+    JetBrainsMono
+    FiraCode
+    Meslo
+    SourceCodePro
+    UbuntuMono
+    RobotoMono
+    DejaVuSansMono
+    Inconsolata
+    VictorMono
+    Mononoki
+    GeistMono
+    0xProto
 )
 
 # --- platform -----------------------------------------------------------------
@@ -82,8 +101,12 @@ install_nerd_font() {
     local name="$1" probe="$1"
     # Some Nerd Font zips rename internally — adjust probe so have_font matches.
     case "$name" in
-        Hermit)       probe=Hurmit ;;
-        IBMPlexMono)  probe=BlexMono ;;
+        Hermit)         probe=Hurmit ;;
+        IBMPlexMono)    probe=BlexMono ;;
+        CascadiaCode)   probe=CaskaydiaCove ;;
+        SourceCodePro)  probe=SauceCodePro ;;
+        Meslo)          probe=MesloLG ;;
+        DejaVuSansMono) probe=DejaVuSansM ;;
     esac
 
     if have_font "$probe"; then
@@ -91,9 +114,8 @@ install_nerd_font() {
         return
     fi
     echo "[get]  NerdFont $name"
-    local tag url zip
-    tag="$(latest_tag ryanoasis/nerd-fonts)"
-    url="https://github.com/ryanoasis/nerd-fonts/releases/download/${tag}/${name}.zip"
+    local url zip
+    url="https://github.com/ryanoasis/nerd-fonts/releases/download/${NERD_TAG}/${name}.zip"
     zip="$TMP/${name}.zip"
     curl -fSL "$url" -o "$zip"
     mkdir -p "$TMP/$name"
@@ -135,7 +157,11 @@ install_commitmono() {
 
 # --- run ----------------------------------------------------------------------
 
-for f in "${NERD_FONTS[@]}"; do
+# Resolved once for the whole run — one API call, not one per font.
+NERD_TAG="$(latest_tag ryanoasis/nerd-fonts)"
+[[ -n "$NERD_TAG" ]] || { echo "nerd-fonts: could not resolve latest release tag" >&2; exit 1; }
+
+for f in "${NERD_FONTS_CONFIG[@]}" "${NERD_FONTS_POPULAR[@]}"; do
     install_nerd_font "$f"
 done
 install_monaspace

@@ -2,6 +2,10 @@ export PATH=$PATH:$HOME/.local/apps # this is where i dump my fun programs...
 export PATH=$PATH:$HOME/.local/scripts
 export PATH=$PATH:$HOME/.local/bin
 
+# i3-sensible-terminal checks $TERMINAL first (and skips it if not
+# executable), so this is safe on boxes without ghostty.
+export TERMINAL=ghostty
+
 # make CapsLock behave like Ctrl:
 setxkbmap -option caps:escape
 xinput set-prop "DELL09E2:00 04F3:30CB Touchpad" "libinput Tapping Enabled" 1
