@@ -1,0 +1,149 @@
+// waybar — status bar for Hyprland.
+// Reference: https://github.com/Alexays/Waybar/wiki/Configuration
+{
+  "layer": "top",
+  "position": "top",
+  "height": 34,
+  "spacing": 4,
+  // Hyprland reserves this space automatically (exclusive zone), which is why
+  // hyprland.conf needs no manual top gap.
+  "margin-top": 6,
+  "margin-left": 10,
+  "margin-right": 10,
+
+  "modules-left": ["hyprland/workspaces", "hyprland/submap", "hyprland/window"],
+  "modules-center": ["clock"],
+  "modules-right": [
+    "tray",
+    "cpu",
+    "memory",
+    "temperature",
+    "pulseaudio",
+    "network",
+    "bluetooth",
+    "battery"
+  ],
+
+  "hyprland/workspaces": {
+    "format": "{icon}",
+    "on-click": "activate",
+    "sort-by-number": true,
+    "active-only": false,
+    // Show the scratchpad in the bar when it holds something. It floats above
+    // every workspace, so without an indicator a window parked there looks
+    // like workspace switching is broken.
+    "show-special": true,
+    "special-visible-only": true,
+    "format-icons": {
+      "default": "",
+      "active": "",
+      "urgent": ""
+    }
+  },
+
+  // Shows "move-all" when ALT+M puts you in that submap.
+  "hyprland/submap": {
+    "format": "󰌌 {}",
+    "tooltip": false
+  },
+
+  "hyprland/window": {
+    "format": "{title}",
+    "max-length": 60,
+    "separate-outputs": true,
+    "rewrite": {
+      "(.*) — Mozilla Firefox": "󰈹 $1",
+      "(.*) - Google Chrome": " $1",
+      "(.*) - Visual Studio Code": "󰨞 $1",
+      "": "󰇄 desktop"
+    }
+  },
+
+  "clock": {
+    "format": "  {:%H:%M}",
+    "format-alt": "  {:%a, %d %b %Y}",
+    "tooltip-format": "<tt><small>{calendar}</small></tt>",
+    "calendar": {
+      "mode": "month",
+      "on-scroll": 1,
+      "format": {
+        "months": "<span color='#cad3f5'><b>{}</b></span>",
+        "days": "<span color='#b8c0e0'>{}</span>",
+        "weekdays": "<span color='#c6a0f6'><b>{}</b></span>",
+        "today": "<span color='#ed8796'><b>{}</b></span>"
+      }
+    },
+    "actions": {
+      "on-click-right": "mode",
+      "on-scroll-up": "shift_up",
+      "on-scroll-down": "shift_down"
+    }
+  },
+
+  "cpu": {
+    "interval": 5,
+    "format": "  {usage}%",
+    "on-click": "ghostty -e btop"
+  },
+
+  "memory": {
+    "interval": 10,
+    "format": "󰍛  {percentage}%",
+    "tooltip-format": "{used:0.1f}G / {total:0.1f}G",
+    "on-click": "ghostty -e btop"
+  },
+
+  // RTX 5090 + Arrow Lake iGPU: hwmon paths shift between boots, so let
+  // waybar autodetect rather than hardcoding a zone that may not exist.
+  "temperature": {
+    "interval": 10,
+    "critical-threshold": 85,
+    "format": " {temperatureC}°C",
+    "format-critical": " {temperatureC}°C"
+  },
+
+  "pulseaudio": {
+    "format": "{icon}  {volume}%",
+    "format-muted": "󰝟  muted",
+    "format-bluetooth": "󰂯  {volume}%",
+    "format-icons": {
+      "headphone": "",
+      "headset": "󰋎",
+      "default": ["", "", ""]
+    },
+    "scroll-step": 5,
+    "on-click": "pavucontrol",
+    "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+  },
+
+  "network": {
+    "format-wifi": "  {signalStrength}%",
+    "format-ethernet": "󰈀  {ifname}",
+    "format-linked": "󰈀  no IP",
+    "format-disconnected": "󰖪  offline",
+    "tooltip-format": "{ifname}: {ipaddr}/{cidr}\n󰇚 {bandwidthDownBits}  󰕒 {bandwidthUpBits}",
+    "on-click": "nm-connection-editor"
+  },
+
+  "bluetooth": {
+    "format": "󰂯",
+    "format-disabled": "",
+    "format-connected": "󰂱 {num_connections}",
+    "tooltip-format": "{controller_alias}\t{controller_address}",
+    "on-click": "blueman-manager"
+  },
+
+  // Desktop machine: the module hides itself when there is no battery.
+  "battery": {
+    "states": { "warning": 30, "critical": 15 },
+    "format": "{icon}  {capacity}%",
+    "format-charging": "󰂄  {capacity}%",
+    "format-plugged": "󰚥  {capacity}%",
+    "format-icons": ["󰁺", "󰁼", "󰁾", "󰂀", "󰂂", "󰁹"]
+  },
+
+  "tray": {
+    "icon-size": 16,
+    "spacing": 8
+  }
+}

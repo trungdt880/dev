@@ -1,0 +1,37 @@
+# mako — notification daemon.
+#
+# Replaces dunst: dunst is an X11-era daemon that merely tolerates Wayland,
+# while mako is wlroots-native and is what the current Hyprland stack uses.
+# (swaync is the other common choice but is not packaged for Ubuntu 26.04.)
+#
+# Reference: man 5 mako
+
+# Catppuccin Macchiato, matching waybar/style.css and the rofi theme.
+background-color=#1e2030f2
+text-color=#cad3f5
+border-color=#c6a0f6
+progress-color=over #363a4f
+
+font=CaskaydiaCove Nerd Font 11
+width=380
+height=140
+margin=10
+padding=14
+border-size=2
+border-radius=12
+icon-path=/usr/share/icons/Papirus-Dark
+max-icon-size=48
+
+default-timeout=6000
+ignore-timeout=false
+layer=overlay
+anchor=top-right
+
+[urgency=low]
+border-color=#6e738d
+default-timeout=4000
+
+[urgency=critical]
+border-color=#ed8796
+text-color=#ed8796
+default-timeout=0

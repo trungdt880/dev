@@ -1,0 +1,52 @@
+/*
+ * rofi 2.0 (Ubuntu 26.04) — native Wayland, no rofi-wayland fork needed.
+ *
+ * This replaces the adi1090x theme pack that env/desktop/linux carries for the
+ * old i3 setup: that collection is X11-era and unmaintained. Because
+ * .config/<tool> is wipe-and-replace and this layer applies after
+ * desktop/linux, WS=linux keeps the old pack and WS=waiv_workstation gets this.
+ */
+configuration {
+    modes: "drun,run,window,filebrowser";
+    font: "CaskaydiaCove Nerd Font 12";
+
+    show-icons: true;
+    icon-theme: "Papirus-Dark";
+    display-drun: "  apps";
+    display-run: "  run";
+    display-window: "  windows";
+    display-filebrowser: "  files";
+    drun-display-format: "{name}";
+
+    /* Match on the .desktop Exec/keywords too, not just the display name. */
+    matching: "fuzzy";
+    drun-match-fields: "name,generic,exec,categories,keywords";
+    sort: true;
+    sorting-method: "fzf";
+
+    terminal: "ghostty";
+    click-to-exit: true;
+
+    /* kb-cancel is left at its default: "Escape,Control+g,Control+bracketleft".
+       Do not add a mouse token to a kb- binding. rofi only understands
+       MousePrimary and MouseDPrimary, and only on the mouse and scroll
+       bindings (the me- and ml- families), never on kb-. Anything else fails
+       to bind and rofi shows an error dialog on every launch. */
+
+    /* Ctrl+j / Ctrl+k to move the selection, matching the vim keys used
+       everywhere else in this setup.
+       Both are taken by default (kb-accept-entry has Control+j,
+       kb-remove-to-eol has Control+k). rofi refuses to start with a duplicate
+       binding and pops up an error dialog listing the clash, so the defaults
+       have to be moved out of the way first -- that is what the next two
+       lines are for, they are not decoration.
+       Shift+Tab must be spelled ISO_Left_Tab; Control+Shift+Tab also clashes. */
+    kb-accept-entry: "Control+m,Return,KP_Enter";
+    kb-remove-to-eol: "";
+    kb-row-up: "Up,Control+k";
+    kb-row-down: "Down,Control+j";
+    kb-mode-next: "Shift+Right,Control+Tab";
+    kb-mode-previous: "Shift+Left,Control+ISO_Left_Tab";
+}
+
+@theme "themes/catppuccin-macchiato.rasi"

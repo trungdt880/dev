@@ -7,7 +7,8 @@
 #   env/desktop/common/   — GUI tools shared between mac and linux personal
 #   env/desktop/mac/      — mac-only GUI
 #   env/desktop/linux/    — linux-only GUI
-#   env/host/<ws>/        — per-headless-host tweaks
+#   env/host/<ws>/        — per-host tweaks (headless boxes, and the
+#                           waiv_workstation Hyprland desktop)
 #
 # Workstation -> ordered layer list lives in WS_LAYERS below.
 # Later layers overwrite earlier ones for files that collide.
@@ -53,6 +54,10 @@ declare -A WS_LAYERS=(
     [linux]="base desktop/common desktop/linux"
     [server]="base host/server"
     [waiv]="base host/waiv"
+    # Ubuntu 26.04 Hyprland/Wayland desktop. Deliberately does NOT take
+    # desktop/linux: that layer is the X11/i3 setup (i3, picom, .xprofile,
+    # the old rofi pack) and none of it applies under Wayland.
+    [waiv_workstation]="base desktop/common host/waiv_workstation"
     [etri]="base host/etri"
     [q]="base host/q"
 )

@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+#
+# Hyprland desktop stack (compositor + waybar + rofi launcher).
+#
+# Everything here is packaged in Ubuntu 26.04 (resolute) universe, so this is
+# plain apt — no PPA, no source build. Configs live in
+# env/host/waiv_workstation/.config/{hypr,waybar,rofi,mako,ghostty} and are
+# installed by `WS=waiv_workstation ./dev-env`.
+#
+# Deliberately NOT installed: dunst, picom, i3, mate-polkit. Those belong to
+# the old X11 setup in env/desktop/linux; the Wayland equivalents are mako,
+# the compositor itself, and hyprpolkitagent.
+#
+# Nothing GNOME-side is touched: the hyprland package drops a session file in
+# /usr/share/wayland-sessions, so Hyprland becomes an extra choice on the GDM
+# login screen while Ubuntu/GNOME stays the default.
+set -euo pipefail
+
+OS="$(uname -s)"
+if [[ "$OS" != "Linux" ]]; then
+    echo "[skip] hyprland is Linux-only (OS=$OS)"
+    exit 0
+fi
+
+if ! command -v apt-get >/dev/null 2>&1; then
+    echo "[skip] hyprland installer expects apt (Debian/Ubuntu)"
+    exit 0
+fi
+
+# Compositor + the hypr* ecosystem daemons the config references.
+CORE=(
+    hyprland                       # the compositor itself
+    xdg-desktop-portal-hyprland    # screenshare / global shortcuts portal
+    xdg-desktop-portal-gtk         # file pickers for GTK apps
+    xwayland                       # X11 apps (recommended, not a hard dep)
+    hyprlock                       # lock screen  (SUPER+CTRL+L)
+    hypridle                       # idle daemon  -> hyprlock
+    swaybg                         # wallpaper. NOT hyprpaper: the 0.8.3 build
+                                   # in Ubuntu 26.04 never reads its config
+                                   # (it does not even error on a nonexistent
+                                   # -c path) and draws nothing.
+    hyprpicker                     # colour picker (SUPER+C)
+    hyprland-qtutils               # provides hyprland-dialog, which Hyprland
+                                   # shells out to for error popups, the
+                                   # version/update screen and the ANR
+                                   # ("application not responding") dialog.
+                                   # Without it Hyprland nags on every start:
+                                   # "hyprland-dialog missing from PATH,
+                                   #  cannot start ANRManager"
+    hyprpolkitagent                # polkit auth agent, Hyprland's own
+    uwsm                           # systemd-managed session; upstream's
+                                   # recommended way to launch Hyprland
+)
+
+# Bar + launcher.
+SHELL_UI=(
+    waybar                         # status bar
+    rofi                           # launcher; 2.0 is Wayland-native
+    mako-notifier                  # notifications (wlroots-native; replaces
+                                   # dunst, which is X11-era)
+    papirus-icon-theme             # icon-theme referenced by rofi config.rasi
+)
+
+# Screenshots, clipboard, colour.
+TOOLS=(
+    grim slurp swappy              # capture / region select / annotate
+    wl-clipboard                   # wl-copy, wl-paste
+    cliphist                       # clipboard history (SUPER+V)
+)
+
+# Session services and applets that populate the waybar tray.
+SESSION=(
+    gnome-keyring                  # secrets for git/ssh/browsers
+    network-manager-gnome          # nm-applet
+    blueman                        # bluetooth applet
+    pavucontrol                    # audio mixer (waybar click target)
+    brightnessctl                  # backlight keys
+    playerctl                      # media keys
+)
+
+# Appearance for non-GTK toolkits.
+THEMING=(
+    nwg-look                       # GTK theme/font/cursor settings GUI
+    qt6ct                          # Qt6 theming to match
+    adwaita-icon-theme
+)
+
+PKGS=("${CORE[@]}" "${SHELL_UI[@]}" "${TOOLS[@]}" "${SESSION[@]}" "${THEMING[@]}")
+
+echo "Installing ${#PKGS[@]} packages..."
+sudo apt-get update
+sudo apt-get install -y "${PKGS[@]}"
+
+# jq is used by .config/hypr/scripts/move-all.sh; runs/tools may already
+# provide it, so only pull it if it is genuinely missing.
+command -v jq >/dev/null 2>&1 || sudo apt-get install -y jq
+
+echo
+echo "hyprland $(Hyprland --version 2>/dev/null | head -1 || echo '(installed)')"
+
+# The Ubuntu packages ship systemd *user* units for waybar, mako, hypridle,
+# hyprpaper and hyprpolkitagent, globally enabled via
+# /etc/systemd/user/graphical-session.target.wants/ and declared only as
+# WantedBy=graphical-session.target — no condition on which compositor is
+# running. That means they also start inside a GNOME session, where waybar and
+# mako fail outright (no wlr-layer-shell) and hyprpaper just wastes memory.
+#
+# A user-scope `disable` cannot override a global enable, so mask them instead;
+# .config/hypr/hyprland.conf starts these by binary via exec-once. Masking is
+# per-user, needs no sudo, and leaves the GNOME session clean.
+echo
+echo "Masking packaged user units (startup is driven by hyprland.conf)..."
+systemctl --user mask \
+    waybar.service \
+    mako.service \
+    hypridle.service \
+    hyprpaper.service \
+    hyprpolkitagent.service
+systemctl --user stop \
+    waybar.service \
+    mako.service \
+    hypridle.service \
+    hyprpaper.service \
+    hyprpolkitagent.service 2>/dev/null || true
+
+# Catch config syntax drift early: Hyprland keeps changing keywords between
+# releases (0.53 moved window rules to blocks and gestures{} to `gesture =`).
+if [[ -f "$HOME/.config/hypr/hyprland.conf" ]]; then
+    echo
+    echo "Verifying hyprland.conf..."
+    Hyprland --verify-config 2>/dev/null | sed -n '/Config parsing result/,$p' || true
+
+    # AQ_DRM_DEVICES must name the real /dev/dri/cardN node — aquamarine
+    # matches it against udev's enumeration, so a by-path symlink silently
+    # yields "Found no gpus to use" and the session bounces at the greeter.
+    # cardN numbering can shift if the GPU or driver set changes, so verify
+    # the pinned value still resolves to the card driving the display.
+    want="$(readlink -f /dev/dri/by-path/pci-0000:02:00.0-card 2>/dev/null || true)"
+    have="$(sed -n 's/^env = AQ_DRM_DEVICES,//p' "$HOME/.config/hypr/hyprland.conf" | tr -d '"'"'[:space:]'"'"')"
+    if [[ -n "$want" && -n "$have" && "$want" != "$have" ]]; then
+        echo
+        echo "  !! AQ_DRM_DEVICES mismatch"
+        echo "     hyprland.conf pins : $have"
+        echo "     NVIDIA card is now : $want"
+        echo "     Update env/host/waiv_workstation/.config/hypr/hyprland.conf."
+    fi
+fi
+
+echo
+echo "Next:"
+echo "  1. WS=waiv_workstation ./dev-env      # install the configs"
+echo "  2. log out, then pick a session from the gear menu at the login screen:"
+echo "       Hyprland                 - plain"
+echo "       Hyprland (uwsm-managed)  - systemd-managed, upstream recommended"
+echo
+echo "GNOME is untouched and stays the default session."

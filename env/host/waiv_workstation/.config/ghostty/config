@@ -1,0 +1,25 @@
+# ghostty — Wayland desktop.
+#
+# Derived from env/desktop/linux/.config/ghostty/config, minus the macos-*
+# and cmd+* keys, which are inert here (that file is shared with the X11/i3
+# setup and still carries mac leftovers).
+
+quit-after-last-window-closed = true
+shell-integration = zsh
+
+font-family = "Monaspace Neon"
+font-size = 14
+font-thicken = true
+bold-is-bright = true
+
+theme = Kanagawabones
+
+window-padding-x = 10,10
+window-padding-y = 10,10
+# Hyprland draws its own borders; the client-side title bar is wasted space.
+window-decoration = false
+
+confirm-close-surface = false
+
+# Wayland native, not XWayland.
+gtk-single-instance = true

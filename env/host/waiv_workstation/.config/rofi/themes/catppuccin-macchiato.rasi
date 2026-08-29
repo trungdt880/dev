@@ -1,0 +1,134 @@
+/*
+ * Catppuccin Macchiato for rofi — matches waybar/style.css and dunstrc.
+ */
+
+* {
+    base:     #24273a;
+    mantle:   #1e2030;
+    crust:    #181926;
+    surface0: #363a4f;
+    surface1: #494d64;
+    overlay0: #6e738d;
+    text:     #cad3f5;
+    subtext0: #a5adcb;
+    mauve:    #c6a0f6;
+    blue:     #8aadf4;
+    red:      #ed8796;
+
+    background-color: transparent;
+    text-color:       @text;
+    margin:  0;
+    padding: 0;
+    spacing: 0;
+}
+
+window {
+    location:         center;
+    anchor:           center;
+    width:            42em;
+    border:           2px;
+    border-radius:    14px;
+    border-color:     @mauve;
+    background-color: @mantle;
+    transparency:     "real";
+}
+
+mainbox {
+    padding:  12px;
+    children: [ inputbar, message, listview, mode-switcher ];
+}
+
+/* ── Search bar ─────────────────────────────────────────────────────────── */
+inputbar {
+    background-color: @surface0;
+    border-radius:    10px;
+    padding:          10px 12px;
+    spacing:          10px;
+    children:         [ prompt, entry ];
+}
+
+prompt {
+    text-color: @mauve;
+    /* Without this the prompt stretches and pushes the entry off-centre. */
+    expand:     false;
+}
+
+entry {
+    placeholder:            "Search…";
+    placeholder-color:      @overlay0;
+    cursor:                 text;
+}
+
+/* ── Results ────────────────────────────────────────────────────────────── */
+listview {
+    lines:         9;
+    columns:       1;
+    fixed-height:  false;
+    scrollbar:     false;
+    cycle:         true;
+    dynamic:       true;
+    margin:        12px 0px 0px 0px;
+    spacing:       2px;
+}
+
+element {
+    padding:       9px 12px;
+    border-radius: 8px;
+    spacing:       10px;
+    cursor:        pointer;
+}
+
+element normal.normal   { text-color: @text; }
+element alternate.normal{ text-color: @text; }
+
+element selected.normal {
+    background-color: @mauve;
+    text-color:       @crust;
+}
+
+element urgent.normal {
+    text-color: @red;
+}
+
+element-icon {
+    size:             1.3em;
+    cursor:           inherit;
+    vertical-align:   0.5;
+}
+
+element-text {
+    cursor:         inherit;
+    text-color:     inherit;
+    vertical-align: 0.5;
+}
+
+/* ── Mode tabs (apps / run / windows / files) ───────────────────────────── */
+mode-switcher {
+    margin:  12px 0px 0px 0px;
+    spacing: 6px;
+}
+
+button {
+    padding:          8px;
+    border-radius:    8px;
+    background-color: @surface0;
+    text-color:       @subtext0;
+    cursor:           pointer;
+}
+
+button selected {
+    background-color: @blue;
+    text-color:       @crust;
+}
+
+/* ── Messages (errors, confirmations) ───────────────────────────────────── */
+message {
+    margin: 12px 0px 0px 0px;
+}
+
+textbox {
+    padding:          10px;
+    border-radius:    8px;
+    background-color: @surface0;
+    text-color:       @text;
+}

@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+#
+# keyd — tap/hold key remapping, used here for:
+#     Caps Lock  tap  -> Escape
+#     Caps Lock  hold -> Ctrl
+#
+# Why keyd and not XKB: XKB can make Caps *either* Escape (`caps:escape`) or
+# Ctrl (`ctrl:nocaps`), never both depending on how long it is held. Tap-vs-hold
+# needs a layer below the keyboard map. keyd is a small systemd daemon that does
+# this at the evdev level, so it behaves identically under Hyprland, GNOME and a
+# bare TTY, and needs no compositor support.
+#
+# SCOPE WARNING: keyd is a SYSTEM daemon. /etc/keyd/default.conf applies to
+# every user on the box, unlike everything else this repo installs, which is
+# confined to $HOME. On a shared machine that is a deliberate trade-off — there
+# is no per-user way to get tap-vs-hold.
+#
+# The alternative, interception-tools + caps2esc, is also system-wide and more
+# fiddly to configure, which is why keyd is preferred here.
+set -euo pipefail
+
+OS="$(uname -s)"
+if [[ "$OS" != "Linux" ]]; then
+    echo "[skip] keyd is Linux-only (OS=$OS)"
+    exit 0
+fi
+
+if ! command -v apt-get >/dev/null 2>&1; then
+    echo "[skip] keyd installer expects apt (Debian/Ubuntu)"
+    exit 0
+fi
+
+sudo apt-get install -y keyd
+
+CONF=/etc/keyd/default.conf
+
+# Never silently clobber an existing map — keyd config is system state this
+# repo does not otherwise own.
+if [[ -f "$CONF" ]] && ! grep -q 'managed by dev-env' "$CONF"; then
+    backup="$CONF.bak.$(date +%Y%m%d%H%M%S)"
+    echo "Existing $CONF was not written by this repo; backing it up to $backup"
+    sudo cp -a "$CONF" "$backup"
+fi
+
+sudo mkdir -p /etc/keyd
+sudo tee "$CONF" >/dev/null <<'KEYD'
+# managed by dev-env (runs/keyd) — edit there, not here.
+
+# [ids] selects which keyboards to act on. * = all of them, including
+# external keyboards plugged in later.
+[ids]
+*
+
+[main]
+# overload(<layer while held>, <key on tap>):
+#   held                        -> acts as Ctrl
+#   tapped and released quickly -> emits Escape
+capslock = overload(control, esc)
+KEYD
+
+sudo systemctl enable --now keyd
+# Pick up the new map without a reboot or replugging the keyboard.
+sudo keyd reload 2>/dev/null || sudo systemctl restart keyd
+
+echo
+echo "keyd active. Caps Lock: tap = Escape, hold = Ctrl."
+echo "Verify with:  sudo keyd monitor      (Ctrl-C to exit)"

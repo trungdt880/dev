@@ -1,0 +1,9 @@
+[user]
+    name = Trung Dao
+    email = bomcon123456@gmail.com
+
+[filter "lfs"]
+    process = git-lfs filter-process
+    required = true
+    clean = git-lfs clean -- %f
+    smudge = git-lfs smudge -- %f

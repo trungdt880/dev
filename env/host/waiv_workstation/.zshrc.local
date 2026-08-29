@@ -1,0 +1,26 @@
+export WS=waiv_workstation
+
+# ibus. hyprland.conf sets these too, for GUI apps launched outside a shell.
+export GTK_IM_MODULE=ibus
+export XMODIFIERS=@im=ibus
+export QT_IM_MODULE=ibus
+
+# Wayland-native toolkit hints for anything started from a terminal.
+export MOZ_ENABLE_WAYLAND=1
+export ELECTRON_OZONE_PLATFORM_HINT=auto
+export QT_QPA_PLATFORM="wayland;xcb"
+export _JAVA_AWT_WM_NONREPARENTING=1
+
+export TERMINAL=ghostty
+export BROWSER=firefox
+
+# Wayland clipboard. The other layers define pcat with xclip, which only works
+# under XWayland; wl-copy is the native equivalent.
+pcat() {
+    if [[ -f "$1" ]]; then
+        wl-copy < "$1"
+        echo "Content of '$1' copied to clipboard."
+    else
+        echo "File '$1' not found."
+    fi
+}

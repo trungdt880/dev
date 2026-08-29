@@ -1,0 +1,174 @@
+/*
+ * waybar — Catppuccin Macchiato.
+ * Same palette the repo already uses in sketchybar/colors.sh and dunstrc,
+ * so the bar, notifications and terminal read as one system.
+ */
+
+@define-color base     #24273a;
+@define-color mantle   #1e2030;
+@define-color crust    #181926;
+@define-color surface0 #363a4f;
+@define-color surface1 #494d64;
+@define-color surface2 #5b6078;
+@define-color overlay0 #6e738d;
+@define-color text     #cad3f5;
+@define-color subtext0 #a5adcb;
+@define-color mauve    #c6a0f6;
+@define-color blue     #8aadf4;
+@define-color sapphire #7dc4e4;
+@define-color teal     #8bd5ca;
+@define-color green    #a6da95;
+@define-color yellow   #eed49f;
+@define-color peach    #f5a97f;
+@define-color red      #ed8796;
+@define-color pink     #f5bde6;
+
+* {
+  font-family: "CaskaydiaCove Nerd Font", "Hack Nerd Font", "JetBrainsMono Nerd Font", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  /* Kill GTK's default min-height so module padding is what actually shows. */
+  min-height: 0;
+}
+
+window#waybar {
+  background: alpha(@mantle, 0.92);
+  border: 1px solid alpha(@surface1, 0.8);
+  border-radius: 12px;
+  color: @text;
+}
+
+window#waybar.hidden {
+  opacity: 0.2;
+}
+
+/* ── Workspaces ─────────────────────────────────────────────────────────── */
+#workspaces {
+  background: transparent;
+  padding: 0 4px;
+  margin: 4px 2px 4px 6px;
+}
+
+#workspaces button {
+  padding: 0 6px;
+  margin: 0 1px;
+  color: @overlay0;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  /* Transition on background too, or the hover state pops in abruptly. */
+  transition: color 150ms ease, background 150ms ease;
+}
+
+#workspaces button:hover {
+  color: @text;
+  background: alpha(@surface0, 0.7);
+  /* GTK draws a box-shadow on hover by default; suppress it. */
+  box-shadow: none;
+  text-shadow: none;
+}
+
+#workspaces button.active {
+  color: @mauve;
+  background: alpha(@surface0, 0.9);
+}
+
+#workspaces button.urgent {
+  color: @crust;
+  background: @red;
+}
+
+/* ── Submap (ALT+M move-all) ────────────────────────────────────────────── */
+#submap {
+  color: @crust;
+  background: @peach;
+  padding: 0 10px;
+  margin: 4px 2px;
+  border-radius: 8px;
+}
+
+/* ── Focused window title ───────────────────────────────────────────────── */
+#window {
+  color: @subtext0;
+  padding: 0 10px;
+  margin: 4px 2px;
+  font-weight: 500;
+}
+
+window#waybar.empty #window {
+  background: transparent;
+  padding: 0;
+  margin: 0;
+}
+
+/* ── Clock (center) ─────────────────────────────────────────────────────── */
+#clock {
+  color: @text;
+  background: alpha(@surface0, 0.9);
+  padding: 0 14px;
+  margin: 4px 2px;
+  border-radius: 8px;
+}
+
+/* ── Right-hand modules ─────────────────────────────────────────────────── */
+#cpu,
+#memory,
+#temperature,
+#pulseaudio,
+#network,
+#bluetooth,
+#battery,
+#tray {
+  background: alpha(@surface0, 0.9);
+  padding: 0 10px;
+  margin: 4px 2px;
+  border-radius: 8px;
+}
+
+#tray {
+  padding: 0 8px;
+}
+
+#tray > .passive {
+  -gtk-icon-effect: dim;
+}
+
+#tray > .needs-attention {
+  -gtk-icon-effect: highlight;
+  background: @red;
+}
+
+/* Accent each metric so the row is scannable without reading labels. */
+#cpu         { color: @blue; }
+#memory      { color: @teal; }
+#temperature { color: @green; }
+#pulseaudio  { color: @yellow; }
+#network     { color: @sapphire; }
+#bluetooth   { color: @blue; }
+#battery     { color: @green; }
+
+/* Right-most module needs a little breathing room from the bar edge. */
+#battery,
+#tray:last-child {
+  margin-right: 6px;
+}
+
+/* ── Alert states ───────────────────────────────────────────────────────── */
+#temperature.critical,
+#battery.critical:not(.charging) {
+  color: @crust;
+  background: @red;
+}
+
+#battery.warning:not(.charging) {
+  color: @crust;
+  background: @peach;
+}
+
+#pulseaudio.muted {
+  color: @overlay0;
+}
+
+#network.disconnected {
+  color: @red;
+}
